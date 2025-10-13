@@ -1,3 +1,5 @@
+import { RequestType } from "./types";
+
 export const BE_URL = process.env.NEXT_PUBLIC_BE_URL || "http://localhost:6969";
 
 // browser helpers
@@ -186,82 +188,22 @@ export function shorten(addr: string) {
     return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "";
 }
 
-async function clearSiteData() {
+export async function getAllUsersMintRequests(requesterWallet: string) {
     try {
-        // Clear caches if available
-        if ("caches" in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((k) => caches.delete(k)));
+        if (!requesterWallet || requesterWallet === "") {
+            throw new Error("Missing requester wallet");
         }
-        // Clear storage
-        try {
-            localStorage.clear();
-        } catch {}
-        try {
-            sessionStorage.clear();
-        } catch {}
-    } catch (err) {
-        console.warn("clearSiteData failed:", err);
-    }
-}
-
-export async function disconnectWallet() {
-    try {
-        const provider = (window as any).ethereum;
-
-        await clearSiteData();
-
-        // Try to disconnect any wallet client (WalletConnect / viem) if available
-        try {
-            const wc =
-                (window as any).walletClient ||
-                (globalThis as any).walletClient;
-            if (wc && typeof (wc as any).disconnect === "function") {
-                try {
-                    await (wc as any).disconnect();
-                } catch (err) {
-                    console.warn("walletClient.disconnect() failed:", err);
-                }
-            }
-        } catch (err) {
-            // ignore if access fails
+        const res = await fetch(
+            `${BE_URL}/api/requests?requesterWallet=${requesterWallet}`
+        );
+        if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            throw new Error("Fetch failed: " + res.status + " " + txt);
         }
-
-        // If provider supports an explicit disconnect (e.g. WalletConnect), call it.
-        if (provider?.disconnect && typeof provider.disconnect === "function") {
-            try {
-                await provider.disconnect();
-            } catch (err) {
-                console.warn("provider.disconnect() failed:", err);
-            }
-        }
-
-        // Remove common listeners you may have added elsewhere
-        try {
-            if (provider?.removeListener) {
-                provider.removeListener("accountsChanged", () => {});
-                provider.removeListener("chainChanged", () => {});
-                provider.removeListener("disconnect", () => {});
-            }
-        } catch (err) {
-            console.warn("removeListener failed:", err);
-        }
-
-        // Clear app-local connection state (keys used elsewhere)
-        try {
-            localStorage.removeItem("vb_address");
-            localStorage.removeItem("vb_provider");
-            localStorage.removeItem("connectedAccount");
-            sessionStorage.removeItem("connectedAccount");
-        } catch {}
-
-        // Notify app/UI to update (emit both events used in your codebase)
-        window.dispatchEvent(new CustomEvent("vb_wallet_disconnect"));
-        window.dispatchEvent(new CustomEvent("wallet-disconnected"));
-
-        // Note: MetaMask doesn't support forcing a full disconnect; user must revoke in wallet UI.
-        return;
-    } catch (err) {
-        console.warn("disconnectWallet error:", err);
+        const data = await res.json();
+        return data.requests as RequestType[];
+    } catch (error) {
+        console.error("Error fetching user mint requests:", error);
+        return [];
     }
 }

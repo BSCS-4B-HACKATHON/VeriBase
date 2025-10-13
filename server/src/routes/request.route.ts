@@ -5,4 +5,6 @@ const requestRouter = Router();
 
 requestRouter.post("/", requestController.CreateRequestHandler);
 
+requestRouter.get("/", requestController.GetRequestsHandler);
+
 export default requestRouter;

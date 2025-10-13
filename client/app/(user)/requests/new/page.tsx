@@ -15,8 +15,6 @@ import {
     encryptField,
     encryptAndUploadFile,
     buildAndUploadMetadata,
-    sha256Hex,
-    disconnectWallet,
     BE_URL,
 } from "@/lib/helpers";
 import {
@@ -26,8 +24,10 @@ import {
     WalletClient,
 } from "viem";
 import { baseSepolia } from "viem/chains";
+import { useWallet } from "@/app/context/walletContext";
 
 export default function NewRequestPage() {
+    const { disconnectWallet } = useWallet();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState("national-id");

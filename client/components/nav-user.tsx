@@ -16,8 +16,8 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import { disconnectWallet } from "@/lib/helpers";
 import { useRouter } from "next/dist/client/components/navigation";
+import { useWallet } from "@/app/context/walletContext";
 
 function shorten(addr?: string | null) {
     if (!addr) return "";
@@ -25,6 +25,7 @@ function shorten(addr?: string | null) {
 }
 
 export function NavUser() {
+    const { disconnectWallet } = useWallet();
     const router = useRouter();
     const [address, setAddress] = useState<string | null>(() =>
         typeof window !== "undefined"

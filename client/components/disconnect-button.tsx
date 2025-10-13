@@ -1,8 +1,10 @@
 "use client";
-import { disconnectWallet } from "@/lib/helpers";
+import { useWallet } from "@/app/context/walletContext";
 import React from "react";
 
 export function DisconnectButton() {
+    const { disconnectWallet } = useWallet();
+
     const handle = async () => {
         await disconnectWallet();
         // optional: refresh UI/server-rendered components if desired

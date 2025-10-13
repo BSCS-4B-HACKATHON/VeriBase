@@ -29,7 +29,7 @@ export interface IRequest extends Document {
         textVersion: string;
         timestamp: Date;
     };
-    status: "pending" | "approved" | "rejected" | "cancelled";
+    status: "pending" | "verified" | "rejected";
     createdAt: Date;
     updatedAt: Date;
 }
@@ -67,7 +67,7 @@ const RequestSchema = new Schema<IRequest>(
         },
         status: {
             type: String,
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "verified", "rejected"],
             default: "pending",
         },
     },

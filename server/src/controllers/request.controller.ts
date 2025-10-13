@@ -96,3 +96,30 @@ export async function CreateRequestHandler(req: Request, res: Response) {
         return res.status(500).json({ ok: false, error: "internal_error" });
     }
 }
+
+export async function GetRequestsHandler(req: Request, res: Response) {
+    try {
+        const { requesterWallet, requestType, status } = req.query;
+        const filter = {};
+        if (requesterWallet) {
+            Object.assign(filter, {
+                requesterWallet: String(requesterWallet).toLowerCase(),
+            });
+        }
+        if (requestType) {
+            Object.assign(filter, {
+                requestType: String(requestType).toLowerCase(),
+            });
+        }
+        if (status) {
+            Object.assign(filter, {
+                status: String(status).toLowerCase(),
+            });
+        }
+        const docs = await RequestModel.find(filter).sort({ createdAt: -1 });
+        return res.status(200).json({ ok: true, requests: docs });
+    } catch (err) {
+        console.error("GetRequestsHandler error:", err);
+        return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+}
