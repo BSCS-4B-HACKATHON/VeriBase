@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,671 +10,993 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { FileText, CreditCard, Upload, Loader2 } from "lucide-react";
+import {
+    genAesKey,
+    encryptField,
+    encryptAndUploadFile,
+    buildAndUploadMetadata,
+    sha256Hex,
+    disconnectWallet,
+    BE_URL,
+} from "@/lib/helpers";
+import {
+    createWalletClient,
+    custom,
+    SignableMessage,
+    WalletClient,
+} from "viem";
+import { baseSepolia } from "viem/chains";
 
 export default function NewRequestPage() {
-  const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("national-id");
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
-    {}
-  );
+    const router = useRouter();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [activeTab, setActiveTab] = useState("national-id");
+    const [uploadProgress, setUploadProgress] = useState<
+        Record<string, number>
+    >({});
+    const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
+    const [address, setAddress] = useState<string | null>(() =>
+        typeof window !== "undefined"
+            ? localStorage.getItem("vb_address")
+            : null
+    );
 
-  // National ID form state
-  const [nationalIdForm, setNationalIdForm] = useState({
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    idNumber: "",
-    issueDate: "",
-    expiryDate: "",
-    frontPicture: null as File | null,
-    backPicture: null as File | null,
-    selfieWithId: null as File | null,
-  });
+    useEffect(() => {
+        // Initialize viem wallet client if injected provider exists and address persisted
+        if (typeof window === "undefined") return;
 
-  // Land Title form state
-  const [landTitleForm, setLandTitleForm] = useState({
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    latitude: "",
-    longitude: "",
-    titleNumber: "",
-    lotArea: "",
-    deedUpload: null as File | null,
-  });
+        const init = async () => {
+            const provider = (window as any).ethereum;
+            if (!provider) return;
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    formType: "nationalId" | "landTitle",
-    fieldName: string
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+            // create a viem wallet client around the injected provider (used for signing)
+            try {
+                const c = createWalletClient({
+                    transport: custom(window.ethereum),
+                    chain: baseSepolia,
+                });
+                setWalletClient(c);
+            } catch (e) {
+                // silently ignore; signing may still work via provider.request
+                console.warn("viem wallet client creation failed", e);
+            }
+        };
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
-      return;
-    }
+        init();
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image files are allowed");
-      return;
-    }
+        // Listen for account changes emitted by extensions
+        const onAccounts = (accounts: string[] | string) => {
+            const acc = Array.isArray(accounts) ? accounts[0] : accounts;
+            if (acc) {
+                setAddress(acc);
+                localStorage.setItem("vb_address", acc);
+            } else {
+                setAddress(null);
+                localStorage.removeItem("vb_address");
+                localStorage.removeItem("vb_provider");
+            }
+        };
 
-    // Simulate upload progress
-    const progressKey = `${formType}-${fieldName}`;
-    setUploadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
+        const onDisconnect = async () => {
+            await disconnectWallet();
+            setAddress(null);
+        };
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        const current = prev[progressKey] || 0;
-        if (current >= 100) {
-          clearInterval(interval);
-          return prev;
+        (window as any).ethereum?.on?.("accountsChanged", onAccounts);
+        window.addEventListener("vb_wallet_disconnect", onDisconnect);
+
+        return () => {
+            (window as any).ethereum?.removeListener?.(
+                "accountsChanged",
+                onAccounts
+            );
+            window.removeEventListener("vb_wallet_disconnect", onDisconnect);
+        };
+    }, []);
+
+    // National ID form state
+    const [nationalIdForm, setNationalIdForm] = useState({
+        firstName: "",
+        middleName: "",
+        lastName: "",
+        idNumber: "",
+        issueDate: "",
+        expiryDate: "",
+        frontPicture: null as File | null,
+        backPicture: null as File | null,
+        selfieWithId: null as File | null,
+    });
+
+    // Land Title form state
+    const [landTitleForm, setLandTitleForm] = useState({
+        firstName: "",
+        middleName: "",
+        lastName: "",
+        latitude: "",
+        longitude: "",
+        titleNumber: "",
+        lotArea: "",
+        deedUpload: null as File | null,
+    });
+
+    const handleFileChange = (
+        e: React.ChangeEvent<HTMLInputElement>,
+        formType: "nationalId" | "landTitle",
+        fieldName: string
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("File size must be less than 5MB");
+            return;
         }
-        return { ...prev, [progressKey]: current + 10 };
-      });
-    }, 100);
 
-    if (formType === "nationalId") {
-      setNationalIdForm((prev) => ({ ...prev, [fieldName]: file }));
-    } else {
-      setLandTitleForm((prev) => ({ ...prev, [fieldName]: file }));
-    }
-  };
+        // Validate file type
+        if (!file.type.startsWith("image/")) {
+            toast.error("Only image files are allowed");
+            return;
+        }
 
-  const handleSubmitNationalId = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+        // Simulate upload progress
+        const progressKey = `${formType}-${fieldName}`;
+        setUploadProgress((prev) => ({ ...prev, [progressKey]: 0 }));
 
-    try {
-      // Validate required fields
-      if (
-        !nationalIdForm.firstName ||
-        !nationalIdForm.lastName ||
-        !nationalIdForm.idNumber ||
-        !nationalIdForm.issueDate ||
-        !nationalIdForm.expiryDate ||
-        !nationalIdForm.frontPicture ||
-        !nationalIdForm.backPicture ||
-        !nationalIdForm.selfieWithId
-      ) {
-        toast.error("Please fill in all required fields");
-        setIsSubmitting(false);
-        return;
-      }
+        const interval = setInterval(() => {
+            setUploadProgress((prev) => {
+                const current = prev[progressKey] || 0;
+                if (current >= 100) {
+                    clearInterval(interval);
+                    return prev;
+                }
+                return { ...prev, [progressKey]: current + 10 };
+            });
+        }, 100);
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (formType === "nationalId") {
+            setNationalIdForm((prev) => ({ ...prev, [fieldName]: file }));
+        } else {
+            setLandTitleForm((prev) => ({ ...prev, [fieldName]: file }));
+        }
+    };
 
-      toast.success("National ID verification request submitted successfully");
-      router.push("/requests");
-    } catch (error) {
-      toast.error("Failed to submit request. Please try again.");
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    const handleSubmitNationalId = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
 
-  const handleSubmitLandTitle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+        try {
+            // Validate required fields
+            if (
+                !nationalIdForm.firstName ||
+                !nationalIdForm.lastName ||
+                !nationalIdForm.idNumber ||
+                !nationalIdForm.issueDate ||
+                !nationalIdForm.expiryDate ||
+                !nationalIdForm.frontPicture ||
+                !nationalIdForm.backPicture ||
+                !nationalIdForm.selfieWithId
+            ) {
+                toast.error("Please fill in all required fields");
+                setIsSubmitting(false);
+                return;
+            }
 
-    try {
-      // Validate required fields
-      if (
-        !landTitleForm.firstName ||
-        !landTitleForm.lastName ||
-        !landTitleForm.latitude ||
-        !landTitleForm.longitude ||
-        !landTitleForm.titleNumber ||
-        !landTitleForm.lotArea ||
-        !landTitleForm.deedUpload
-      ) {
-        toast.error("Please fill in all required fields");
-        setIsSubmitting(false);
-        return;
-      }
+            // 1) generate AES key
+            const aesKey = await genAesKey();
 
-      // Validate coordinates
-      const lat = parseFloat(landTitleForm.latitude);
-      const lng = parseFloat(landTitleForm.longitude);
-      if (isNaN(lat) || lat < -90 || lat > 90) {
-        toast.error("Latitude must be between -90 and 90");
-        setIsSubmitting(false);
-        return;
-      }
-      if (isNaN(lng) || lng < -180 || lng > 180) {
-        toast.error("Longitude must be between -180 and 180");
-        setIsSubmitting(false);
-        return;
-      }
+            // 2) encrypt form fields
+            const encFirst = await encryptField(
+                aesKey,
+                nationalIdForm.firstName
+            );
+            const encMiddle = nationalIdForm.middleName
+                ? await encryptField(aesKey, nationalIdForm.middleName)
+                : undefined;
+            const encLast = await encryptField(aesKey, nationalIdForm.lastName);
+            const encIssue = await encryptField(
+                aesKey,
+                nationalIdForm.issueDate
+            );
+            const encExpiry = await encryptField(
+                aesKey,
+                nationalIdForm.expiryDate
+            );
+            // you may prefer to salt+hash idNumber; here we encrypt it
+            const encId = await encryptField(aesKey, nationalIdForm.idNumber);
 
-      // Validate lot area
-      const area = parseFloat(landTitleForm.lotArea);
-      if (isNaN(area) || area <= 0) {
-        toast.error("Lot area must be a positive number");
-        setIsSubmitting(false);
-        return;
-      }
+            // 3) encrypt & upload files (backend handles pinning to Pinata)
+            const filesMeta: Array<any> = [];
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+            const frontMeta = await encryptAndUploadFile(
+                nationalIdForm.frontPicture!,
+                aesKey,
+                address || ""
+            );
+            frontMeta.tag = "front_id";
+            filesMeta.push(frontMeta);
 
-      toast.success("Land title verification request submitted successfully");
-      router.push("/requests");
-    } catch (error) {
-      toast.error("Failed to submit request. Please try again.");
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+            const backMeta = await encryptAndUploadFile(
+                nationalIdForm.backPicture!,
+                aesKey,
+                address || ""
+            );
+            backMeta.tag = "back_id";
+            filesMeta.push(backMeta);
 
-  const FileInputField = ({
-    label,
-    id,
-    value,
-    onChange,
-    helperText,
-  }: {
-    label: string;
-    id: string;
-    value: File | null;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    helperText?: string;
-  }) => {
-    const progressKey = id;
-    const progress = uploadProgress[progressKey];
+            const selfieMeta = await encryptAndUploadFile(
+                nationalIdForm.selfieWithId!,
+                aesKey,
+                address || ""
+            );
+            selfieMeta.tag = "selfie_with_id";
+            filesMeta.push(selfieMeta);
+
+            // 4) upload encrypted metadata and sign (buildAndUploadMetadata signs metadataHash)
+            const signWithViemWrapper = walletClient
+                ? {
+                      signMessage: async (args: {
+                          message: string | Uint8Array;
+                      }) => {
+                          // viem expects a different parameter type — cast the message to any to satisfy it
+                          return await walletClient.signMessage({
+                              message: args.message as SignableMessage,
+                              account: address as `0x${string}`,
+                          });
+                      },
+                  }
+                : undefined;
+
+            const { metadataCid, metadataHash, uploaderSignature } =
+                await buildAndUploadMetadata({
+                    aesKey,
+                    encryptedFields: {
+                        firstName: encFirst,
+                        ...(encMiddle && { middleName: encMiddle }),
+                        lastName: encLast,
+                        issueDate: encIssue,
+                        expiryDate: encExpiry,
+                        idNumber: encId,
+                    },
+                    filesMeta,
+                    signerAddress: address || "",
+                    signWithViemWalletClient: signWithViemWrapper,
+                });
+
+            // 5) prepare safe payload to backend
+            if (!address) {
+                toast.error("Please connect your wallet before submitting.");
+                setIsSubmitting(false);
+                return;
+            }
+
+            const requestId =
+                "0x" +
+                Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                    .map((b) => b.toString(16).padStart(2, "0"))
+                    .join("");
+
+            const payload = {
+                requestId,
+                requesterWallet: address || "",
+                requestType: "national_id",
+                minimalPublicLabel: `${nationalIdForm.firstName[0]}. ${nationalIdForm.lastName}`,
+                metadataCid,
+                metadataHash,
+                uploaderSignature,
+                files: filesMeta, // ciphertext metadata only
+                consent: {
+                    textVersion: "v1",
+                    timestamp: new Date().toISOString(),
+                },
+                createdAt: new Date().toISOString(),
+                status: "pending",
+            };
+
+            console.log("payload:", payload);
+
+            // // Simulate API call
+            // await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            const res = await fetch(`${BE_URL}/api/requests`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                const body = await res.text().catch(() => null);
+                console.error("Create request failed:", res.status, body);
+                toast.error("Failed to create request on server.");
+                setIsSubmitting(false);
+                return;
+            }
+
+            toast.success(
+                "National ID verification request submitted successfully"
+            );
+            router.replace("/requests");
+        } catch (error) {
+            toast.error("Failed to submit request. Please try again.");
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSubmitLandTitle = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        try {
+            // Validate required fields
+            if (
+                !landTitleForm.firstName ||
+                !landTitleForm.lastName ||
+                !landTitleForm.latitude ||
+                !landTitleForm.longitude ||
+                !landTitleForm.titleNumber ||
+                !landTitleForm.lotArea ||
+                !landTitleForm.deedUpload
+            ) {
+                toast.error("Please fill in all required fields");
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Validate coordinates
+            const lat = parseFloat(landTitleForm.latitude);
+            const lng = parseFloat(landTitleForm.longitude);
+            if (isNaN(lat) || lat < -90 || lat > 90) {
+                toast.error("Latitude must be between -90 and 90");
+                setIsSubmitting(false);
+                return;
+            }
+            if (isNaN(lng) || lng < -180 || lng > 180) {
+                toast.error("Longitude must be between -180 and 180");
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Validate lot area
+            const area = parseFloat(landTitleForm.lotArea);
+            if (isNaN(area) || area <= 0) {
+                toast.error("Lot area must be a positive number");
+                setIsSubmitting(false);
+                return;
+            }
+
+            console.log(landTitleForm);
+
+            // Simulate API call
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            toast.success(
+                "Land title verification request submitted successfully"
+            );
+            router.push("/requests");
+        } catch (error) {
+            toast.error("Failed to submit request. Please try again.");
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const FileInputField = ({
+        label,
+        id,
+        value,
+        onChange,
+        helperText,
+    }: {
+        label: string;
+        id: string;
+        value: File | null;
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+        helperText?: string;
+    }) => {
+        const progressKey = id;
+        const progress = uploadProgress[progressKey];
+
+        return (
+            <div className="space-y-2">
+                <Label htmlFor={id}>{label}</Label>
+                <div className="relative">
+                    <Input
+                        id={id}
+                        type="file"
+                        accept="image/*"
+                        onChange={onChange}
+                        className="cursor-pointer file:mr-4 file:px-2 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                    />
+                    {value && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                            <Upload className="h-4 w-4 text-primary" />
+                            <span className="truncate">{value.name}</span>
+                            {progress !== undefined && progress < 100 && (
+                                <span className="ml-auto text-xs">
+                                    ({progress}%)
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+                {helperText && (
+                    <p className="text-xs text-muted-foreground">
+                        {helperText}
+                    </p>
+                )}
+                {progress !== undefined && progress < 100 && (
+                    <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-primary transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
-      <div className="space-y-2">
-        <Label htmlFor={id}>{label}</Label>
-        <div className="relative">
-          <Input
-            id={id}
-            type="file"
-            accept="image/*"
-            onChange={onChange}
-            className="cursor-pointer file:mr-4 file:px-2 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-          />
-          {value && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Upload className="h-4 w-4 text-primary" />
-              <span className="truncate">{value.name}</span>
-              {progress !== undefined && progress < 100 && (
-                <span className="ml-auto text-xs">({progress}%)</span>
-              )}
+        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="mb-8 text-center">
+                    <h1 className="text-4xl font-bold tracking-tight mb-2">
+                        Create New Verification Request
+                    </h1>
+                    <p className="text-muted-foreground text-lg">
+                        Verify your identity or ownership through Base
+                    </p>
+                </div>
+
+                {/* Main Card */}
+                <Card className="shadow-lg border-border/50 backdrop-blur-sm bg-card/95">
+                    <div className="p-6 md:p-10">
+                        <Tabs
+                            value={activeTab}
+                            onValueChange={setActiveTab}
+                            className="w-full"
+                        >
+                            <TabsList className="grid w-full grid-cols-2 mb-8">
+                                <TabsTrigger
+                                    value="national-id"
+                                    className="gap-2"
+                                >
+                                    <CreditCard className="h-4 w-4" />
+                                    National ID
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="land-title"
+                                    className="gap-2"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Land Title
+                                </TabsTrigger>
+                            </TabsList>
+
+                            {/* National ID Tab */}
+                            <TabsContent
+                                value="national-id"
+                                className="animate-in fade-in-50 duration-500"
+                            >
+                                <form
+                                    onSubmit={handleSubmitNationalId}
+                                    className="space-y-6"
+                                >
+                                    <div>
+                                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                            <CreditCard className="h-5 w-5 text-primary" />
+                                            National ID Information
+                                        </h3>
+                                        <Separator className="mb-6" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="firstName">
+                                                First Name{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="firstName"
+                                                placeholder="Enter your first name"
+                                                value={nationalIdForm.firstName}
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            firstName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="middleName">
+                                                Middle Name{" "}
+                                                <span className="text-muted-foreground text-xs">
+                                                    (optional)
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="middleName"
+                                                placeholder="Enter your middle name"
+                                                value={
+                                                    nationalIdForm.middleName
+                                                }
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            middleName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="lastName">
+                                                Last Name{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="lastName"
+                                                placeholder="Enter your last name"
+                                                value={nationalIdForm.lastName}
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            lastName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="idNumber">
+                                                ID Number{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="idNumber"
+                                                placeholder="Enter your ID number"
+                                                value={nationalIdForm.idNumber}
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            idNumber:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="issueDate">
+                                                Issue Date{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="issueDate"
+                                                type="date"
+                                                value={nationalIdForm.issueDate}
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            issueDate:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="expiryDate">
+                                                Expiry Date{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="expiryDate"
+                                                type="date"
+                                                value={
+                                                    nationalIdForm.expiryDate
+                                                }
+                                                onChange={(e) =>
+                                                    setNationalIdForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            expiryDate:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <Separator className="my-6" />
+
+                                    <div>
+                                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                            <Upload className="h-5 w-5 text-primary" />
+                                            Document Uploads
+                                        </h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <FileInputField
+                                            label="Front Picture/Scan of ID *"
+                                            id="nationalId-frontPicture"
+                                            value={nationalIdForm.frontPicture}
+                                            onChange={(e) =>
+                                                handleFileChange(
+                                                    e,
+                                                    "nationalId",
+                                                    "frontPicture"
+                                                )
+                                            }
+                                            helperText="Accepted formats: JPG, PNG (Max 5MB)"
+                                        />
+
+                                        <FileInputField
+                                            label="Back Picture/Scan of ID *"
+                                            id="nationalId-backPicture"
+                                            value={nationalIdForm.backPicture}
+                                            onChange={(e) =>
+                                                handleFileChange(
+                                                    e,
+                                                    "nationalId",
+                                                    "backPicture"
+                                                )
+                                            }
+                                            helperText="Accepted formats: JPG, PNG (Max 5MB)"
+                                        />
+
+                                        <FileInputField
+                                            label="Selfie with Front ID *"
+                                            id="nationalId-selfieWithId"
+                                            value={nationalIdForm.selfieWithId}
+                                            onChange={(e) =>
+                                                handleFileChange(
+                                                    e,
+                                                    "nationalId",
+                                                    "selfieWithId"
+                                                )
+                                            }
+                                            helperText="Please hold your ID next to your face. Accepted formats: JPG, PNG (Max 5MB)"
+                                        />
+                                    </div>
+
+                                    <Separator className="my-6" />
+
+                                    <div className="flex items-center justify-end gap-3 pt-4">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() =>
+                                                router.push("/requests")
+                                            }
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="min-w-[150px]"
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Submitting...
+                                                </>
+                                            ) : (
+                                                "Submit Request"
+                                            )}
+                                        </Button>
+                                    </div>
+                                </form>
+                            </TabsContent>
+
+                            {/* Land Title Tab */}
+                            <TabsContent
+                                value="land-title"
+                                className="animate-in fade-in-50 duration-500"
+                            >
+                                <form
+                                    onSubmit={handleSubmitLandTitle}
+                                    className="space-y-6"
+                                >
+                                    <div>
+                                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                            <FileText className="h-5 w-5 text-primary" />
+                                            Land Title Information
+                                        </h3>
+                                        <Separator className="mb-6" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="landFirstName">
+                                                First Name{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="landFirstName"
+                                                placeholder="Enter your first name"
+                                                value={landTitleForm.firstName}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            firstName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="landMiddleName">
+                                                Middle Name{" "}
+                                                <span className="text-muted-foreground text-xs">
+                                                    (optional)
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="landMiddleName"
+                                                placeholder="Enter your middle name"
+                                                value={landTitleForm.middleName}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            middleName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="landLastName">
+                                                Last Name{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="landLastName"
+                                                placeholder="Enter your last name"
+                                                value={landTitleForm.lastName}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            lastName:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="titleNumber">
+                                                Title Number{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="titleNumber"
+                                                placeholder="Enter the land title number"
+                                                value={
+                                                    landTitleForm.titleNumber
+                                                }
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            titleNumber:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="latitude">
+                                                Latitude{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="latitude"
+                                                type="number"
+                                                step="any"
+                                                placeholder="e.g., 14.5995"
+                                                value={landTitleForm.latitude}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            latitude:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Must be between -90 and 90
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="longitude">
+                                                Longitude{" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="longitude"
+                                                type="number"
+                                                step="any"
+                                                placeholder="e.g., 120.9842"
+                                                value={landTitleForm.longitude}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            longitude:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Must be between -180 and 180
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="lotArea">
+                                                Lot Area (sqm){" "}
+                                                <span className="text-destructive">
+                                                    *
+                                                </span>
+                                            </Label>
+                                            <Input
+                                                id="lotArea"
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="e.g., 1000.50"
+                                                value={landTitleForm.lotArea}
+                                                onChange={(e) =>
+                                                    setLandTitleForm(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            lotArea:
+                                                                e.target.value,
+                                                        })
+                                                    )
+                                                }
+                                                required
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Total area in square meters
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <Separator className="my-6" />
+
+                                    <div>
+                                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                            <Upload className="h-5 w-5 text-primary" />
+                                            Document Upload
+                                        </h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <FileInputField
+                                            label="Land Title Deed (Scan/Photo) *"
+                                            id="landTitle-deedUpload"
+                                            value={landTitleForm.deedUpload}
+                                            onChange={(e) =>
+                                                handleFileChange(
+                                                    e,
+                                                    "landTitle",
+                                                    "deedUpload"
+                                                )
+                                            }
+                                            helperText="Upload a clear scan or photo of your land title deed. Accepted formats: JPG, PNG (Max 5MB)"
+                                        />
+                                    </div>
+
+                                    <Separator className="my-6" />
+
+                                    <div className="flex items-center justify-end gap-3 pt-4">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() =>
+                                                router.push("/requests")
+                                            }
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="min-w-[150px]"
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Submitting...
+                                                </>
+                                            ) : (
+                                                "Submit Request"
+                                            )}
+                                        </Button>
+                                    </div>
+                                </form>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                </Card>
+
+                {/* Helper Text */}
+                <div className="mt-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                        All information is encrypted and securely stored on the
+                        blockchain.
+                    </p>
+                </div>
             </div>
-          )}
         </div>
-        {helperText && (
-          <p className="text-xs text-muted-foreground">{helperText}</p>
-        )}
-        {progress !== undefined && progress < 100 && (
-          <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
-      </div>
     );
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight mb-2">
-            Create New Verification Request
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Verify your identity or ownership through Base
-          </p>
-        </div>
-
-        {/* Main Card */}
-        <Card className="shadow-lg border-border/50 backdrop-blur-sm bg-card/95">
-          <div className="p-6 md:p-10">
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
-            >
-              <TabsList className="grid w-full grid-cols-2 mb-8">
-                <TabsTrigger value="national-id" className="gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  National ID
-                </TabsTrigger>
-                <TabsTrigger value="land-title" className="gap-2">
-                  <FileText className="h-4 w-4" />
-                  Land Title
-                </TabsTrigger>
-              </TabsList>
-
-              {/* National ID Tab */}
-              <TabsContent
-                value="national-id"
-                className="animate-in fade-in-50 duration-500"
-              >
-                <form onSubmit={handleSubmitNationalId} className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <CreditCard className="h-5 w-5 text-primary" />
-                      National ID Information
-                    </h3>
-                    <Separator className="mb-6" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">
-                        First Name <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="firstName"
-                        placeholder="Enter your first name"
-                        value={nationalIdForm.firstName}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            firstName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="middleName">
-                        Middle Name{" "}
-                        <span className="text-muted-foreground text-xs">
-                          (optional)
-                        </span>
-                      </Label>
-                      <Input
-                        id="middleName"
-                        placeholder="Enter your middle name"
-                        value={nationalIdForm.middleName}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            middleName: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">
-                        Last Name <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="lastName"
-                        placeholder="Enter your last name"
-                        value={nationalIdForm.lastName}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            lastName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="idNumber">
-                        ID Number <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="idNumber"
-                        placeholder="Enter your ID number"
-                        value={nationalIdForm.idNumber}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            idNumber: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="issueDate">
-                        Issue Date <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="issueDate"
-                        type="date"
-                        value={nationalIdForm.issueDate}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            issueDate: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="expiryDate">
-                        Expiry Date <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="expiryDate"
-                        type="date"
-                        value={nationalIdForm.expiryDate}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            expiryDate: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Upload className="h-5 w-5 text-primary" />
-                      Document Uploads
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6">
-                    <FileInputField
-                      label="Front Picture/Scan of ID *"
-                      id="nationalId-frontPicture"
-                      value={nationalIdForm.frontPicture}
-                      onChange={(e) =>
-                        handleFileChange(e, "nationalId", "frontPicture")
-                      }
-                      helperText="Accepted formats: JPG, PNG (Max 5MB)"
-                    />
-
-                    <FileInputField
-                      label="Back Picture/Scan of ID *"
-                      id="nationalId-backPicture"
-                      value={nationalIdForm.backPicture}
-                      onChange={(e) =>
-                        handleFileChange(e, "nationalId", "backPicture")
-                      }
-                      helperText="Accepted formats: JPG, PNG (Max 5MB)"
-                    />
-
-                    <FileInputField
-                      label="Selfie with Front ID *"
-                      id="nationalId-selfieWithId"
-                      value={nationalIdForm.selfieWithId}
-                      onChange={(e) =>
-                        handleFileChange(e, "nationalId", "selfieWithId")
-                      }
-                      helperText="Please hold your ID next to your face. Accepted formats: JPG, PNG (Max 5MB)"
-                    />
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div className="flex items-center justify-end gap-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => router.push("/requests")}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="min-w-[150px]"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        "Submit Request"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-
-              {/* Land Title Tab */}
-              <TabsContent
-                value="land-title"
-                className="animate-in fade-in-50 duration-500"
-              >
-                <form onSubmit={handleSubmitLandTitle} className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-primary" />
-                      Land Title Information
-                    </h3>
-                    <Separator className="mb-6" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="landFirstName">
-                        First Name <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="landFirstName"
-                        placeholder="Enter your first name"
-                        value={landTitleForm.firstName}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            firstName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="landMiddleName">
-                        Middle Name{" "}
-                        <span className="text-muted-foreground text-xs">
-                          (optional)
-                        </span>
-                      </Label>
-                      <Input
-                        id="landMiddleName"
-                        placeholder="Enter your middle name"
-                        value={landTitleForm.middleName}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            middleName: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="landLastName">
-                        Last Name <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="landLastName"
-                        placeholder="Enter your last name"
-                        value={landTitleForm.lastName}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            lastName: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="titleNumber">
-                        Title Number <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="titleNumber"
-                        placeholder="Enter the land title number"
-                        value={landTitleForm.titleNumber}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            titleNumber: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="latitude">
-                        Latitude <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="latitude"
-                        type="number"
-                        step="any"
-                        placeholder="e.g., 14.5995"
-                        value={landTitleForm.latitude}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            latitude: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Must be between -90 and 90
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="longitude">
-                        Longitude <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="longitude"
-                        type="number"
-                        step="any"
-                        placeholder="e.g., 120.9842"
-                        value={landTitleForm.longitude}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            longitude: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Must be between -180 and 180
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="lotArea">
-                        Lot Area (sqm){" "}
-                        <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="lotArea"
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g., 1000.50"
-                        value={landTitleForm.lotArea}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            lotArea: e.target.value,
-                          }))
-                        }
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Total area in square meters
-                      </p>
-                    </div>
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Upload className="h-5 w-5 text-primary" />
-                      Document Upload
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6">
-                    <FileInputField
-                      label="Land Title Deed (Scan/Photo) *"
-                      id="landTitle-deedUpload"
-                      value={landTitleForm.deedUpload}
-                      onChange={(e) =>
-                        handleFileChange(e, "landTitle", "deedUpload")
-                      }
-                      helperText="Upload a clear scan or photo of your land title deed. Accepted formats: JPG, PNG (Max 5MB)"
-                    />
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div className="flex items-center justify-end gap-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => router.push("/requests")}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="min-w-[150px]"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        "Submit Request"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </Card>
-
-        {/* Helper Text */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            All information is encrypted and securely stored on the blockchain.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
