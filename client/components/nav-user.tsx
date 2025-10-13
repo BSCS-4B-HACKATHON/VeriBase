@@ -1,110 +1,146 @@
-"use client"
+"use client";
 
-import {
-  IconCreditCard,
-  IconDotsVertical,
-  IconLogout,
-  IconNotification,
-  IconUserCircle,
-} from "@tabler/icons-react"
+import React, { useEffect, useState } from "react";
+import { IconDotsVertical, IconLogout, IconWallet } from "@tabler/icons-react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
-  const { isMobile } = useSidebar()
+import { useRouter } from "next/dist/client/components/navigation";
+import { useWallet } from "@/app/context/walletContext";
 
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
-                </span>
-              </div>
-              <IconDotsVertical className="ml-auto size-4" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
-                  </span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <IconUserCircle />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <IconLogout />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
-  )
+function shorten(addr?: string | null) {
+    if (!addr) return "";
+    return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+export function NavUser() {
+    const { disconnectWallet } = useWallet();
+    const router = useRouter();
+    const [address, setAddress] = useState<string | null>(() =>
+        typeof window !== "undefined"
+            ? localStorage.getItem("vb_address")
+            : null
+    );
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    const avatarSrc = null; // replace with ENS/avatar fetch if you add it later
+
+    // perform redirect when address becomes null
+    useEffect(() => {
+        if (!address) {
+            router.replace("/");
+        }
+    }, [address, router]);
+
+    useEffect(() => {
+        const onDisconnect = () => setAddress(null);
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === "vb_address")
+                setAddress(localStorage.getItem("vb_address"));
+        };
+        const onConnectEvent = () =>
+            setAddress(localStorage.getItem("vb_address"));
+
+        window.addEventListener(
+            "vb_wallet_disconnect",
+            onDisconnect as EventListener
+        );
+        window.addEventListener(
+            "vb_wallet_connect",
+            onConnectEvent as EventListener
+        );
+        window.addEventListener("storage", onStorage);
+
+        return () => {
+            window.removeEventListener(
+                "vb_wallet_disconnect",
+                onDisconnect as EventListener
+            );
+            window.removeEventListener(
+                "vb_wallet_connect",
+                onConnectEvent as EventListener
+            );
+            window.removeEventListener("storage", onStorage);
+        };
+    }, []);
+
+    const handleDisconnect = async () => {
+        await disconnectWallet();
+        setAddress(null);
+
+        // Redirect to home page after disconnecting
+        router.replace("/");
+        return;
+    };
+
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            className="data-[state=open]:bg-sidebar-accent"
+                        >
+                            <Avatar className="h-8 w-8 rounded-lg grayscale">
+                                {avatarSrc ? (
+                                    <AvatarImage
+                                        src={avatarSrc}
+                                        alt={address ?? "wallet"}
+                                    />
+                                ) : (
+                                    <AvatarFallback className="rounded-lg">
+                                        {address
+                                            ? address.slice(2, 4).toUpperCase()
+                                            : "WL"}
+                                    </AvatarFallback>
+                                )}
+                            </Avatar>
+
+                            <div className="grid flex-1 text-left text-sm leading-tight ml-2">
+                                <span className="truncate font-medium">
+                                    {mounted
+                                        ? address
+                                            ? shorten(address)
+                                            : "Connect Wallet"
+                                        : "Connect Wallet"}
+                                </span>
+                                <span className="text-muted-foreground truncate text-xs">
+                                    {address ? "Connected" : "Not connected"}
+                                </span>
+                            </div>
+
+                            <IconDotsVertical className="ml-auto size-4" />
+                        </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+
+                    <DropdownMenuContent
+                        className="min-w-44 rounded-lg"
+                        side="right"
+                        align="end"
+                        sideOffset={4}
+                    >
+                        <DropdownMenuItem onClick={handleDisconnect}>
+                            <IconLogout className="mr-2" />
+                            Disconnect Wallet
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
 }
