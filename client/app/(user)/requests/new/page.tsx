@@ -10,21 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { FileText, CreditCard, Upload, Loader2 } from "lucide-react";
-import {
-    genAesKey,
-    encryptField,
-    encryptAndUploadFile,
-    buildAndUploadMetadata,
-    BE_URL,
-} from "@/lib/helpers";
-import {
-    createWalletClient,
-    custom,
-    SignableMessage,
-    WalletClient,
-} from "viem";
+import { BE_URL } from "@/lib/helpers";
+import { createWalletClient, custom, WalletClient } from "viem";
 import { baseSepolia } from "viem/chains";
 import { useWallet } from "@/app/context/walletContext";
+import { submitLandTitle, submitNationalId } from "@/lib/request-submit";
+import FileInputField from "@/components/file-input-field";
 
 export default function NewRequestPage() {
     const { disconnectWallet } = useWallet();
@@ -164,279 +155,27 @@ export default function NewRequestPage() {
     const handleSubmitNationalId = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-
-        try {
-            // Validate required fields
-            if (
-                !nationalIdForm.firstName ||
-                !nationalIdForm.lastName ||
-                !nationalIdForm.idNumber ||
-                !nationalIdForm.issueDate ||
-                !nationalIdForm.expiryDate ||
-                !nationalIdForm.frontPicture ||
-                !nationalIdForm.backPicture ||
-                !nationalIdForm.selfieWithId
-            ) {
-                toast.error("Please fill in all required fields");
-                setIsSubmitting(false);
-                return;
-            }
-
-            // 1) generate AES key
-            const aesKey = await genAesKey();
-
-            // 2) encrypt form fields
-            const encFirst = await encryptField(
-                aesKey,
-                nationalIdForm.firstName
-            );
-            const encMiddle = nationalIdForm.middleName
-                ? await encryptField(aesKey, nationalIdForm.middleName)
-                : undefined;
-            const encLast = await encryptField(aesKey, nationalIdForm.lastName);
-            const encIssue = await encryptField(
-                aesKey,
-                nationalIdForm.issueDate
-            );
-            const encExpiry = await encryptField(
-                aesKey,
-                nationalIdForm.expiryDate
-            );
-            // you may prefer to salt+hash idNumber; here we encrypt it
-            const encId = await encryptField(aesKey, nationalIdForm.idNumber);
-
-            // 3) encrypt & upload files (backend handles pinning to Pinata)
-            const filesMeta: Array<any> = [];
-
-            const frontMeta = await encryptAndUploadFile(
-                nationalIdForm.frontPicture!,
-                aesKey,
-                address || ""
-            );
-            frontMeta.tag = "front_id";
-            filesMeta.push(frontMeta);
-
-            const backMeta = await encryptAndUploadFile(
-                nationalIdForm.backPicture!,
-                aesKey,
-                address || ""
-            );
-            backMeta.tag = "back_id";
-            filesMeta.push(backMeta);
-
-            const selfieMeta = await encryptAndUploadFile(
-                nationalIdForm.selfieWithId!,
-                aesKey,
-                address || ""
-            );
-            selfieMeta.tag = "selfie_with_id";
-            filesMeta.push(selfieMeta);
-
-            // 4) upload encrypted metadata and sign (buildAndUploadMetadata signs metadataHash)
-            const signWithViemWrapper = walletClient
-                ? {
-                      signMessage: async (args: {
-                          message: string | Uint8Array;
-                      }) => {
-                          // viem expects a different parameter type — cast the message to any to satisfy it
-                          return await walletClient.signMessage({
-                              message: args.message as SignableMessage,
-                              account: address as `0x${string}`,
-                          });
-                      },
-                  }
-                : undefined;
-
-            const { metadataCid, metadataHash, uploaderSignature } =
-                await buildAndUploadMetadata({
-                    aesKey,
-                    encryptedFields: {
-                        firstName: encFirst,
-                        ...(encMiddle && { middleName: encMiddle }),
-                        lastName: encLast,
-                        issueDate: encIssue,
-                        expiryDate: encExpiry,
-                        idNumber: encId,
-                    },
-                    filesMeta,
-                    signerAddress: address || "",
-                    signWithViemWalletClient: signWithViemWrapper,
-                });
-
-            // 5) prepare safe payload to backend
-            if (!address) {
-                toast.error("Please connect your wallet before submitting.");
-                setIsSubmitting(false);
-                return;
-            }
-
-            const requestId =
-                "0x" +
-                Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map((b) => b.toString(16).padStart(2, "0"))
-                    .join("");
-
-            const payload = {
-                requestId,
-                requesterWallet: address || "",
-                requestType: "national_id",
-                minimalPublicLabel: `${nationalIdForm.firstName[0]}. ${nationalIdForm.lastName}`,
-                metadataCid,
-                metadataHash,
-                uploaderSignature,
-                files: filesMeta, // ciphertext metadata only
-                consent: {
-                    textVersion: "v1",
-                    timestamp: new Date().toISOString(),
-                },
-                createdAt: new Date().toISOString(),
-                status: "pending",
-            };
-
-            console.log("payload:", payload);
-
-            // // Simulate API call
-            // await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            const res = await fetch(`${BE_URL}/api/requests`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            if (!res.ok) {
-                const body = await res.text().catch(() => null);
-                console.error("Create request failed:", res.status, body);
-                toast.error("Failed to create request on server.");
-                setIsSubmitting(false);
-                return;
-            }
-
-            toast.success(
-                "National ID verification request submitted successfully"
-            );
-            router.replace("/requests");
-        } catch (error) {
-            toast.error("Failed to submit request. Please try again.");
-            console.error(error);
-        } finally {
-            setIsSubmitting(false);
-        }
+        await submitNationalId(nationalIdForm, {
+            address,
+            walletClient,
+            BE_URL,
+            setIsSubmitting,
+            toast,
+            onSuccess: () => router.replace("/requests"),
+        });
     };
 
     const handleSubmitLandTitle = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-
-        try {
-            // Validate required fields
-            if (
-                !landTitleForm.firstName ||
-                !landTitleForm.lastName ||
-                !landTitleForm.latitude ||
-                !landTitleForm.longitude ||
-                !landTitleForm.titleNumber ||
-                !landTitleForm.lotArea ||
-                !landTitleForm.deedUpload
-            ) {
-                toast.error("Please fill in all required fields");
-                setIsSubmitting(false);
-                return;
-            }
-
-            // Validate coordinates
-            const lat = parseFloat(landTitleForm.latitude);
-            const lng = parseFloat(landTitleForm.longitude);
-            if (isNaN(lat) || lat < -90 || lat > 90) {
-                toast.error("Latitude must be between -90 and 90");
-                setIsSubmitting(false);
-                return;
-            }
-            if (isNaN(lng) || lng < -180 || lng > 180) {
-                toast.error("Longitude must be between -180 and 180");
-                setIsSubmitting(false);
-                return;
-            }
-
-            // Validate lot area
-            const area = parseFloat(landTitleForm.lotArea);
-            if (isNaN(area) || area <= 0) {
-                toast.error("Lot area must be a positive number");
-                setIsSubmitting(false);
-                return;
-            }
-
-            console.log(landTitleForm);
-
-            // Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            toast.success(
-                "Land title verification request submitted successfully"
-            );
-            router.push("/requests");
-        } catch (error) {
-            toast.error("Failed to submit request. Please try again.");
-            console.error(error);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const FileInputField = ({
-        label,
-        id,
-        value,
-        onChange,
-        helperText,
-    }: {
-        label: string;
-        id: string;
-        value: File | null;
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-        helperText?: string;
-    }) => {
-        const progressKey = id;
-        const progress = uploadProgress[progressKey];
-
-        return (
-            <div className="space-y-2">
-                <Label htmlFor={id}>{label}</Label>
-                <div className="relative">
-                    <Input
-                        id={id}
-                        type="file"
-                        accept="image/*"
-                        onChange={onChange}
-                        className="cursor-pointer file:mr-4 file:px-2 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                    />
-                    {value && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                            <Upload className="h-4 w-4 text-primary" />
-                            <span className="truncate">{value.name}</span>
-                            {progress !== undefined && progress < 100 && (
-                                <span className="ml-auto text-xs">
-                                    ({progress}%)
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </div>
-                {helperText && (
-                    <p className="text-xs text-muted-foreground">
-                        {helperText}
-                    </p>
-                )}
-                {progress !== undefined && progress < 100 && (
-                    <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-primary transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                )}
-            </div>
-        );
+        await submitLandTitle(landTitleForm, {
+            address,
+            walletClient,
+            BE_URL,
+            setIsSubmitting,
+            toast,
+            onSuccess: () => router.replace("/requests"),
+        });
     };
 
     return (
@@ -454,13 +193,14 @@ export default function NewRequestPage() {
 
                 {/* Main Card */}
                 <Card className="shadow-lg border-border/50 backdrop-blur-sm bg-card/95">
-                    <div className="p-6 md:p-10">
+                    <div className="p-4 md:p-10">
                         <Tabs
                             value={activeTab}
                             onValueChange={setActiveTab}
                             className="w-full"
                         >
-                            <TabsList className="grid w-full grid-cols-2 mb-8">
+                            {/* single column tabs on mobile, two columns from sm */}
+                            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 mb-8">
                                 <TabsTrigger
                                     value="national-id"
                                     className="gap-2"
@@ -665,6 +405,7 @@ export default function NewRequestPage() {
                                                 )
                                             }
                                             helperText="Accepted formats: JPG, PNG (Max 5MB)"
+                                            uploadProgress={uploadProgress}
                                         />
 
                                         <FileInputField
@@ -679,6 +420,7 @@ export default function NewRequestPage() {
                                                 )
                                             }
                                             helperText="Accepted formats: JPG, PNG (Max 5MB)"
+                                            uploadProgress={uploadProgress}
                                         />
 
                                         <FileInputField
@@ -693,12 +435,14 @@ export default function NewRequestPage() {
                                                 )
                                             }
                                             helperText="Please hold your ID next to your face. Accepted formats: JPG, PNG (Max 5MB)"
+                                            uploadProgress={uploadProgress}
                                         />
                                     </div>
 
                                     <Separator className="my-6" />
 
-                                    <div className="flex items-center justify-end gap-3 pt-4">
+                                    {/* stack buttons on mobile (centered), inline and right-aligned on sm */}
+                                    <div className="flex flex-col sm:flex-row items-center sm:items-center justify-center sm:justify-end gap-3 pt-4 w-full">
                                         <Button
                                             type="button"
                                             variant="ghost"
@@ -706,13 +450,14 @@ export default function NewRequestPage() {
                                                 router.push("/requests")
                                             }
                                             disabled={isSubmitting}
+                                            className="w-full sm:w-auto"
                                         >
                                             Cancel
                                         </Button>
                                         <Button
                                             type="submit"
                                             disabled={isSubmitting}
-                                            className="min-w-[150px]"
+                                            className="w-full sm:min-w-[150px] text-center"
                                         >
                                             {isSubmitting ? (
                                                 <>
@@ -952,12 +697,13 @@ export default function NewRequestPage() {
                                                 )
                                             }
                                             helperText="Upload a clear scan or photo of your land title deed. Accepted formats: JPG, PNG (Max 5MB)"
+                                            uploadProgress={uploadProgress}
                                         />
                                     </div>
 
                                     <Separator className="my-6" />
 
-                                    <div className="flex items-center justify-end gap-3 pt-4">
+                                    <div className="flex flex-col sm:flex-row items-center sm:items-center justify-center sm:justify-end gap-3 pt-4 w-full">
                                         <Button
                                             type="button"
                                             variant="ghost"
@@ -965,13 +711,14 @@ export default function NewRequestPage() {
                                                 router.push("/requests")
                                             }
                                             disabled={isSubmitting}
+                                            className="w-full sm:w-auto"
                                         >
                                             Cancel
                                         </Button>
                                         <Button
                                             type="submit"
                                             disabled={isSubmitting}
-                                            className="min-w-[150px]"
+                                            className="w-full sm:min-w-[150px] text-center"
                                         >
                                             {isSubmitting ? (
                                                 <>

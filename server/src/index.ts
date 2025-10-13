@@ -8,7 +8,22 @@ import uploadRoutes from "./routes/upload.route";
 import requestRoutes from "./routes/request.route";
 
 const app = express();
-app.use(cors());
+
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+
+app.use(
+    cors({
+        origin: (origin, cb) => {
+            // allow requests from the frontend or allow server-to-server (no origin)
+            if (!origin || origin === FRONTEND_ORIGIN) return cb(null, true);
+            return cb(new Error("CORS blocked by server"));
+        },
+        credentials: true, // allow cookies / credentials
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    })
+);
+
 app.use(express.json({ limit: "50mb" }));
 
 // Connect to MongoDB

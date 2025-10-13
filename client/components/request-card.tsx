@@ -1,12 +1,6 @@
 import { shorten } from "@/lib/helpers";
 import { RequestType } from "@/lib/types";
-import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-} from "@radix-ui/react-dropdown-menu";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -14,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card";
 import getStatusBadge from "./get-status-badge";
+import { useRouter } from "next/navigation";
 
 export default function RequestCard({
     request,
@@ -22,6 +17,7 @@ export default function RequestCard({
     request: RequestType;
     onClick: () => void;
 }) {
+    const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [copiedAssetId, setCopiedAssetId] = useState(false);
     const [copiedWallet, setCopiedWallet] = useState(false);
@@ -59,11 +55,14 @@ export default function RequestCard({
         }
     };
 
+    const handleView = () => router.push(`/requests/${request.requestId}`);
+
     const isPending = String(request.status).toLowerCase() === "pending";
     const isRejected = String(request.status).toLowerCase() === "rejected";
 
     return (
-        <Card className="group rounded-2xl border-muted/40 bg-muted/40 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer overflow-hidden">
+        // make card a column flex so content pushes footer to bottom and cards align in grid
+        <Card className="group rounded-2xl border-muted/40 bg-muted/40 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer overflow-visible flex flex-col">
             <CardHeader className="pb-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -75,14 +74,16 @@ export default function RequestCard({
                 </div>
             </CardHeader>
 
-            <CardContent className="space-y-3 pb-4">
+            {/* let content grow so footer sticks to bottom */}
+            <CardContent className="space-y-3 pb-4 flex-1">
+                {/* Request ID, Wallet, Date (unchanged) */}
                 <div>
                     <p className="text-xs text-muted-foreground mb-1">
                         Request ID
                     </p>
                     <div className="flex items-center gap-2 group/copy">
                         <p className="font-mono text-sm font-medium text-foreground truncate">
-                            {request.requestId}
+                            {shorten(request.requestId)}
                         </p>
                         <Button
                             variant="ghost"
@@ -136,22 +137,28 @@ export default function RequestCard({
                         Date Submitted
                     </p>
                     <p className="text-sm text-foreground">
-                        {format(new Date(request.createdAt), "MMM dd, yyyy")}
+                        {request.createdAt
+                            ? format(
+                                  new Date(request.createdAt),
+                                  "MMM dd, yyyy"
+                              )
+                            : "—"}
                     </p>
                 </div>
             </CardContent>
 
-            <CardFooter className="pt-4 border-t border-border/40 flex gap-2">
-                {/* Pending: show Mint button + actions menu
-                    Rejected: show only Delete
-                    Others: show View button + actions menu (including delete) */}
-                {isPending ? (
-                    <>
+            {/* responsive footer: stacked on mobile, inline on sm+; trigger is not absolute */}
+            <CardFooter className="pt-4 border-t border-border/40 flex items-center gap-2">
+                <div className="flex-1">
+                    {String(request.status).toLowerCase() === "approved" ? (
                         <Button
-                            onClick={onClick}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClick();
+                            }}
                             variant="default"
                             size="sm"
-                            className="flex-1 group-hover:bg-primary/90"
+                            className="flex-1 h-10 w-full"
                             disabled={isLoading}
                         >
                             {isLoading ? (
@@ -160,108 +167,85 @@ export default function RequestCard({
                                 "Mint"
                             )}
                         </Button>
-
-                        <DropdownMenu>
-                            <DropdownMenuTrigger
-                                asChild
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <Button variant="outline" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="w-[160px]"
-                            >
-                                <DropdownMenuItem
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onClick();
-                                    }}
-                                >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(e);
-                                    }}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </>
-                ) : isRejected ? (
-                    <Button
-                        onClick={async (e) => {
-                            e.stopPropagation();
-                            await handleDelete(e);
-                        }}
-                        variant="destructive"
-                        size="sm"
-                        className="w-full"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? (
-                            <Loader className="h-4 w-4 animate-spin" />
-                        ) : (
-                            "Delete"
-                        )}
-                    </Button>
-                ) : (
-                    <>
+                    ) : isRejected ? (
                         <Button
-                            onClick={onClick}
+                            onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleDelete(e);
+                            }}
+                            variant="destructive"
+                            size="sm"
+                            className="flex-1 h-10 w-full"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <Loader className="h-4 w-4 animate-spin" />
+                            ) : (
+                                "Delete"
+                            )}
+                        </Button>
+                    ) : (
+                        <Button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleView();
+                            }}
                             variant="default"
                             size="sm"
-                            className="flex-1"
+                            className="flex-1 h-10 w-full"
                         >
                             View
                         </Button>
+                    )}
+                </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger
-                                asChild
+                <div>
+                    <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={(e) => e.stopPropagation()}
+                                className="h-10 w-10 p-0 ml-2"
+                                aria-label="More actions"
                             >
-                                <Button variant="outline" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenu.Trigger>
+
+                        <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                                side="top"
                                 align="end"
-                                className="w-[160px]"
+                                sideOffset={8}
+                                className="z-50 w-[160px] rounded-md border bg-popover p-1 shadow-lg"
                             >
-                                <DropdownMenuItem
-                                    onClick={(e) => {
+                                <DropdownMenu.Item
+                                    onClick={(e: any) => {
                                         e.stopPropagation();
-                                        onClick();
+                                        handleView();
                                     }}
+                                    className="flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-muted/20 cursor-pointer"
                                 >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={(e) => {
+                                    <Eye className="mr-2 h-4 w-4" /> View
+                                    Details
+                                </DropdownMenu.Item>
+
+                                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
+                                <DropdownMenu.Item
+                                    onClick={(e: any) => {
                                         e.stopPropagation();
                                         handleDelete(e);
                                     }}
+                                    className="flex items-center gap-2 px-3 py-2 rounded text-sm text-destructive hover:bg-destructive/10 cursor-pointer"
                                 >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </>
-                )}
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenu.Item>
+                            </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                </div>
             </CardFooter>
         </Card>
     );

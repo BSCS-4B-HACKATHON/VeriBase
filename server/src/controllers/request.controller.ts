@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import { recoverMessageAddress } from "viem";
-import RequestModel from "../models/DocMetaSchema";
+import RequestModel, { IRequest } from "../models/DocMetaSchema";
+import * as storage from "../utils/pinataUtils";
+import {
+    unwrapAesKeyForServer,
+    decryptField,
+    decryptFileToSignedUrl,
+} from "../utils/helpers";
 
 export async function CreateRequestHandler(req: Request, res: Response) {
     try {
@@ -120,6 +126,262 @@ export async function GetRequestsHandler(req: Request, res: Response) {
         return res.status(200).json({ ok: true, requests: docs });
     } catch (err) {
         console.error("GetRequestsHandler error:", err);
+        return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+}
+
+export async function GetRequestByIdHandler(req: Request, res: Response) {
+    try {
+        const { requestId, requesterWallet } = req.params;
+        if (!requestId) {
+            return res
+                .status(400)
+                .json({ ok: false, error: "missing requestId parameter" });
+        }
+
+        // fetch request record from DB
+        const recordDoc = await RequestModel.findOne({ requestId: requestId });
+        if (!recordDoc) {
+            return res
+                .status(404)
+                .json({ ok: false, error: "request not found" });
+        }
+
+        // if requesterWallet is provided, ensure it matches the record
+        if (requesterWallet) {
+            if (
+                String(recordDoc.requesterWallet).toLowerCase() !==
+                String(requesterWallet).toLowerCase()
+            ) {
+                return res
+                    .status(403)
+                    .json({ ok: false, error: "access denied" });
+            }
+        }
+
+        // normalize output object
+        const output: any =
+            typeof recordDoc.toObject === "function"
+                ? recordDoc.toObject()
+                : JSON.parse(JSON.stringify(recordDoc));
+
+        // fetch metadata blob if present
+        let metadata: any = null;
+        if (output.metadataCid) {
+            try {
+                metadata = await storage.fetchJsonByCid(output.metadataCid);
+            } catch (err) {
+                console.warn(
+                    "failed to fetch metadata CID",
+                    output.metadataCid,
+                    err
+                );
+            }
+        }
+
+        // Attempt to obtain AES key for server-side decryption (server-wrapped key)
+        let rawAesKey: Buffer | null = null;
+        if (metadata?.encryptedAesKeyForServer) {
+            try {
+                rawAesKey = await unwrapAesKeyForServer(
+                    metadata.encryptedAesKeyForServer
+                );
+            } catch (err) {
+                console.warn("failed to unwrap AES key for server", err);
+                rawAesKey = null;
+            }
+        }
+
+        // Decrypt scalar encrypted fields if we have AES key
+        if (
+            rawAesKey &&
+            metadata?.encryptedFields &&
+            typeof metadata.encryptedFields === "object"
+        ) {
+            output.decryptedFields = {};
+            for (const [k, v] of Object.entries(metadata.encryptedFields)) {
+                try {
+                    // v can be an object { ciphertextBase64, iv } or a string (base64 ct with tag)
+                    if (typeof v === "string") {
+                        // try decrypting string form (assume ciphertext+tag base64 with iv stored elsewhere)
+                        output.decryptedFields[k] = await decryptField(
+                            rawAesKey,
+                            {
+                                ciphertextBase64: v,
+                                iv: metadata.iv ?? "",
+                            } as any
+                        );
+                    } else {
+                        output.decryptedFields[k] = await decryptField(
+                            rawAesKey,
+                            v as any
+                        );
+                    }
+                } catch (err) {
+                    console.warn(
+                        `failed to decrypt field ${k} for ${requestId}`,
+                        err
+                    );
+                    output.decryptedFields[k] = null;
+                }
+            }
+        } else if (metadata?.encryptedFields) {
+            // expose encrypted fields so client (uploader) can attempt client-side decryption if it has the key
+            output.encryptedFields = metadata.encryptedFields;
+        }
+
+        // Map decryptedFields into domain shapes if available
+        if (output.decryptedFields) {
+            const rt = String(
+                output.requestType || output.requestType
+            ).toLowerCase();
+            if (
+                (rt === "national_id" || rt === "national-id") &&
+                !output.nationalIdData
+            ) {
+                output.nationalIdData = {
+                    firstName: output.decryptedFields.firstName ?? null,
+                    middleName: output.decryptedFields.middleName ?? null,
+                    lastName: output.decryptedFields.lastName ?? null,
+                    idNumber: output.decryptedFields.idNumber ?? null,
+                    issueDate: output.decryptedFields.issueDate ?? null,
+                    expiryDate: output.decryptedFields.expiryDate ?? null,
+                };
+            } else if (
+                (rt === "land_title" ||
+                    rt === "land-title" ||
+                    rt === "land_ownership") &&
+                !output.landTitleData
+            ) {
+                output.landTitleData = {
+                    firstName: output.decryptedFields.firstName ?? null,
+                    middleName: output.decryptedFields.middleName ?? null,
+                    lastName: output.decryptedFields.lastName ?? null,
+                    latitude: output.decryptedFields.latitude ?? null,
+                    longitude: output.decryptedFields.longitude ?? null,
+                    titleNumber: output.decryptedFields.titleNumber ?? null,
+                    lotArea: output.decryptedFields.lotArea ?? null,
+                };
+            }
+        }
+
+        // Files: prefer files stored in the DB record; if missing, fall back to metadata.files
+        // Build a normalized files array:
+        // - prefer DB saved files (record may include cid, iv, filename)
+        // - otherwise fall back to metadata.files (from metadataCid on IPFS)
+        const dbFiles = Array.isArray(output.files) ? output.files : [];
+        const metaFiles = Array.isArray(metadata?.files) ? metadata.files : [];
+
+        // if DB didn't store files, use metadata files
+        let fileEntries: any[] = [];
+        if (dbFiles.length) {
+            // attach metadata to db files where possible
+            fileEntries = dbFiles.map((f: any) => ({
+                ...f,
+                meta:
+                    metaFiles.find((mf: any) => mf.cid === f.cid) ?? undefined,
+            }));
+        } else if (metaFiles.length) {
+            // use metadata files directly (ensure fields align with DB shape)
+            fileEntries = metaFiles.map((mf: any) => ({
+                cid: mf.cid,
+                filename: mf.filename ?? mf.name,
+                mime: mf.mime,
+                size: mf.size,
+                iv: mf.iv, // iv stored in metadata.json
+                meta: mf,
+            }));
+        } else {
+            fileEntries = [];
+        }
+
+        output.files = fileEntries;
+
+        // If we have an AES key, attempt to decrypt each file and produce a usable URL (data: or signed)
+        if (rawAesKey && output.files.length) {
+            const filesOut: any[] = [];
+            for (const f of output.files) {
+                try {
+                    const encryptedStream = await storage.fetchFileStreamByCid(
+                        f.cid
+                    );
+                    // decryptFileToSignedUrl should use f.iv || f.meta?.iv to decrypt
+                    const signedUrl = await decryptFileToSignedUrl(
+                        encryptedStream,
+                        rawAesKey,
+                        f
+                    );
+                    filesOut.push({ ...f, decryptedUrl: signedUrl });
+                } catch (err) {
+                    console.warn("failed to decrypt file", f.cid, err);
+                    filesOut.push({
+                        ...f,
+                        decryptedUrl: null,
+                        decryptError: true,
+                    });
+                }
+            }
+            output.files = filesOut;
+        }
+
+        // Map decrypted file URLs into domain objects (deedUpload, front/back/selfie)
+        if (Array.isArray(output.files) && output.files.length) {
+            const findByPurpose = (purpose: string) =>
+                output.files.find((f: any) => {
+                    const p = (
+                        f.tag ||
+                        f.meta?.tag ||
+                        f.purpose ||
+                        f.meta?.purpose ||
+                        ""
+                    )
+                        .toString()
+                        .toLowerCase();
+                    return p === purpose.toLowerCase();
+                });
+
+            if (output.landTitleData) {
+                const deed = findByPurpose("land_deed");
+                output.landTitleData.deedUpload =
+                    output.landTitleData.deedUpload ??
+                    deed?.decryptedUrl ??
+                    deed?.meta?.url ??
+                    null;
+            }
+
+            if (output.nationalIdData) {
+                const front = findByPurpose("front_id");
+                const back = findByPurpose("back_id");
+                const selfie = findByPurpose("selfie_with_id");
+
+                output.nationalIdData.frontPicture =
+                    output.nationalIdData.frontPicture ??
+                    front?.decryptedUrl ??
+                    front?.meta?.url ??
+                    null;
+                output.nationalIdData.backPicture =
+                    output.nationalIdData.backPicture ??
+                    back?.decryptedUrl ??
+                    back?.meta?.url ??
+                    null;
+                output.nationalIdData.selfieWithId =
+                    output.nationalIdData.selfieWithId ??
+                    selfie?.decryptedUrl ??
+                    selfie?.meta?.url ??
+                    null;
+            }
+        }
+
+        // sanitize metadata before returning
+        if (metadata) {
+            delete metadata.encryptedAesKeys;
+            delete metadata.encryptedAesKeyForServer;
+            output.metadata = metadata;
+        }
+
+        return res.status(200).json({ ok: true, request: output });
+    } catch (error) {
+        console.error("GetRequestByIdHandler error:", error);
         return res.status(500).json({ ok: false, error: "internal_error" });
     }
 }

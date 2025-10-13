@@ -1,6 +1,9 @@
 import { RequestType } from "./types";
 
 export const BE_URL = process.env.NEXT_PUBLIC_BE_URL || "http://localhost:6969";
+export const SERVER_PUBLIC_KEY_PEM =
+    process.env.NEXT_PUBLIC_SERVER_PUBKEY_PEM ||
+    `-----BEGIN PUBLIC KEY-----\n...base64...\n-----END PUBLIC KEY-----`;
 
 // browser helpers
 export async function sha256Hex(buf: ArrayBuffer) {
@@ -104,6 +107,7 @@ export async function buildAndUploadMetadata({
     filesMeta,
     signerAddress,
     signWithViemWalletClient,
+    serverWrappedAesKey, // new optional
 }: {
     aesKey: CryptoKey;
     encryptedFields: Record<string, { ciphertextBase64: string; iv: string }>;
@@ -114,13 +118,19 @@ export async function buildAndUploadMetadata({
             message: Uint8Array | string;
         }) => Promise<string>;
     } | null;
+    serverWrappedAesKey?: string;
 }) {
-    const metadata = {
+    const metadata: any = {
         version: "1",
         encryptedFields,
         files: filesMeta,
         createdAt: new Date().toISOString(),
     };
+
+    if (serverWrappedAesKey) {
+        // include wrapped AES key for server to be able to decrypt
+        metadata.encryptedAesKeyForServer = serverWrappedAesKey;
+    }
 
     const json = JSON.stringify(metadata);
     const bytes = new TextEncoder().encode(json);
@@ -206,4 +216,78 @@ export async function getAllUsersMintRequests(requesterWallet: string) {
         console.error("Error fetching user mint requests:", error);
         return [];
     }
+}
+
+export async function pemToArrayBuffer(pem: string) {
+    // strip header/footer and decode base64
+    const b64 = pem
+        .replace(/-----BEGIN PUBLIC KEY-----/, "")
+        .replace(/-----END PUBLIC KEY-----/, "")
+        .replace(/\s+/g, "");
+    const binary = atob(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+}
+
+/**
+ * Wrap AES CryptoKey with server RSA public key (PEM). Returns base64 wrapped key.
+ */
+export async function wrapAesKeyForServer(
+    aesKey: CryptoKey,
+    serverPublicKeyPem: string
+) {
+    // export raw AES key bytes
+    const raw = await crypto.subtle.exportKey("raw", aesKey); // ArrayBuffer
+
+    // import server public key (SPKI)
+    const spki = await pemToArrayBuffer(serverPublicKeyPem);
+    const pubKey = await crypto.subtle.importKey(
+        "spki",
+        spki,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        false,
+        ["encrypt"]
+    );
+
+    // encrypt (wrap) raw AES key with RSA-OAEP
+    const wrapped = await crypto.subtle.encrypt(
+        { name: "RSA-OAEP" },
+        pubKey,
+        raw
+    );
+    return toBase64(new Uint8Array(wrapped));
+}
+
+export function findFileUrl(files: any[] | undefined, keywords: string[]) {
+    if (!Array.isArray(files) || files.length === 0) return null;
+    const lower = (s?: any) => (s ? String(s).toLowerCase() : "");
+
+    // 1) exact purpose/purpose in meta/tag
+    for (const f of files) {
+        const p =
+            lower(f.purpose) || lower(f.meta?.purpose) || lower(f.meta?.tag);
+        if (keywords.some((k) => p === k.toLowerCase()))
+            return f.decryptedUrl ?? f.meta?.url ?? null;
+    }
+
+    // 2) contains in filename or meta name or cid
+    for (const f of files) {
+        const name =
+            lower(f.filename) || lower(f.meta?.filename) || lower(f.meta?.name);
+        const cid = lower(f.cid);
+        if (
+            keywords.some(
+                (k) =>
+                    name.includes(k.toLowerCase()) ||
+                    cid.includes(k.toLowerCase())
+            )
+        )
+            return f.decryptedUrl ?? f.meta?.url ?? null;
+    }
+
+    // 3) fallback to first decryptedUrl if any
+    const any = files.find((f) => f.decryptedUrl);
+    return any ? any.decryptedUrl : null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { IconDotsVertical, IconLogout, IconWallet } from "@tabler/icons-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -32,6 +32,11 @@ export function NavUser() {
             ? localStorage.getItem("vb_address")
             : null
     );
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     const avatarSrc = null; // replace with ENS/avatar fetch if you add it later
 
     // perform redirect when address becomes null
@@ -108,8 +113,10 @@ export function NavUser() {
 
                             <div className="grid flex-1 text-left text-sm leading-tight ml-2">
                                 <span className="truncate font-medium">
-                                    {address
-                                        ? shorten(address)
+                                    {mounted
+                                        ? address
+                                            ? shorten(address)
+                                            : "Connect Wallet"
                                         : "Connect Wallet"}
                                 </span>
                                 <span className="text-muted-foreground truncate text-xs">
