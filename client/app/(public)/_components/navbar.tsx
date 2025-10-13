@@ -156,23 +156,14 @@ export default function Navbar() {
       </header>
 
       <header className="sticky top-4 z-[9999] mx-4 flex w-auto flex-row items-center justify-between rounded-full bg-background/80 backdrop-blur-sm border border-border/50 shadow-lg md:hidden px-4 py-3">
-        <a
-          className="flex items-center justify-center gap-2"
-          href="https://v0.app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <svg
-            fill="currentColor"
-            viewBox="0 0 147 70"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-            className="text-foreground rounded-full size-7 w-7"
-          >
-            <path d="M56 50.2031V14H70V60.1562C70 65.5928 65.5928 70 60.1562 70C57.5605 70 54.9982 68.9992 53.1562 67.1573L0 14H19.7969L56 50.2031Z"></path>
-            <path d="M147 56H133V23.9531L100.953 56H133V70H96.6875C85.8144 70 77 61.1856 77 50.3125V14H91V46.1562L123.156 14H91V0H127.312C138.186 0 147 8.81439 147 19.6875V56Z"></path>
-          </svg>
-        </a>
+        <Link href="/" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <Shield className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="font-semibold text-sidebar-foreground">
+            VeriBase
+          </span>
+        </Link>
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
