@@ -30,6 +30,11 @@ export interface IRequest extends Document {
         timestamp: Date;
     };
     status: "pending" | "verified" | "rejected";
+    // NFT minting fields
+    nftMinted?: boolean;
+    nftTokenId?: number;
+    nftTransactionHash?: string;
+    nftMintedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -70,6 +75,11 @@ const RequestSchema = new Schema<IRequest>(
             enum: ["pending", "verified", "rejected"],
             default: "pending",
         },
+        // NFT minting tracking
+        nftMinted: { type: Boolean, default: false },
+        nftTokenId: { type: Number },
+        nftTransactionHash: { type: String },
+        nftMintedAt: { type: Date },
     },
     { timestamps: true, versionKey: false }
 );
