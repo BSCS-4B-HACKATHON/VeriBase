@@ -33,20 +33,18 @@ import {
 import { Shield } from "lucide-react";
 import Link from "next/link";
 
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+const navItems = [
+  {
+    title: "Home",
+    url: "/home",
+    icon: IconDashboard,
   },
-  navMain: [
-    {
-      title: "Requests",
-      url: "/requests",
-      icon: IconListDetails,
-    },
-  ],
-};
+  {
+    title: "Requests",
+    url: "/requests",
+    icon: IconListDetails,
+  },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
@@ -71,10 +69,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   );
