@@ -52,13 +52,6 @@ export default function ConnectWallet() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const openInExplorer = () => {
-    if (address) {
-      // Base Sepolia explorer
-      window.open(`https://sepolia.basescan.org/address/${address}`, "_blank");
-    }
-  };
-
   return (
     <div className="flex items-center gap-3">
       {isConnected && address ? (
@@ -139,10 +132,7 @@ export default function ConnectWallet() {
             </DropdownMenuItem>
 
             {/* View on Explorer */}
-            <DropdownMenuItem
-              onClick={openInExplorer}
-              className="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors"
-            >
+            <DropdownMenuItem className="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors">
               <IconDashboard className="w-4 h-4 text-white/60 group-hover:text-[#3ECF8E] transition-colors" />
               <Link
                 href="/requests"
