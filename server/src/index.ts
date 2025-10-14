@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 // Import routes
 import uploadRoutes from "./routes/upload.route";
 import requestRoutes from "./routes/request.route";
+import nftRoutes from "./routes/nft.route";
 
 const app = express();
 
@@ -39,6 +40,7 @@ mongoose
 // Use routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api", nftRoutes); // NFT minting routes
 
 app.get("/", (_req, res) => {
     res.send("Hello, Blockchain API is running!");
