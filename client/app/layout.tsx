@@ -39,7 +39,6 @@ export default async function RootLayout({
         >
           <WalletProvider>{children}</WalletProvider>
           <Toaster />
-          <Footer />
         </ThemeProvider>
       </body>
     </html>
