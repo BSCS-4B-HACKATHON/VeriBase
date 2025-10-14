@@ -19,7 +19,7 @@ app.use(
             return cb(new Error("CORS blocked by server"));
         },
         credentials: true, // allow cookies / credentials
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "Accept"],
     })
 );

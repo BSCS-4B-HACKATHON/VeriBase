@@ -42,7 +42,7 @@ type SubmitOptions = {
     toast: { success: (s: string) => void; error: (s: string) => void };
 };
 
-async function createSignWrapper(
+export async function createSignWrapper(
     walletClient: WalletClient | null,
     address: string | null
 ) {
@@ -345,6 +345,189 @@ export async function submitLandTitle(
     } catch (err) {
         console.error("submitLandTitle error:", err);
         toast.error("Failed to submit request. Please try again.");
+        if (onError) onError(err);
+    } finally {
+        if (setIsSubmitting) setIsSubmitting(false);
+    }
+}
+
+// Update existing request (uploader edits). Requires requester wallet and requestId.
+export async function updateNationalId(
+    requestId: string,
+    form: NationalIdForm,
+    opts: SubmitOptions
+) {
+    const {
+        address,
+        walletClient,
+        BE_URL,
+        onSuccess,
+        onError,
+        setIsSubmitting,
+        toast,
+    } = opts;
+
+    try {
+        if (setIsSubmitting) setIsSubmitting(true);
+        if (!address) {
+            toast.error("Please connect your wallet before updating.");
+            return;
+        }
+
+        const aesKey = await genAesKey();
+
+        const encFirst = await encryptField(aesKey, form.firstName);
+        const encMiddle = form.middleName
+            ? await encryptField(aesKey, form.middleName)
+            : undefined;
+        const encLast = await encryptField(aesKey, form.lastName);
+        const encIssue = await encryptField(aesKey, form.issueDate);
+        const encExpiry = await encryptField(aesKey, form.expiryDate);
+        const encId = await encryptField(aesKey, form.idNumber);
+
+        const filesMeta: Array<any> = [];
+
+        if (form.frontPicture) {
+            const m = await encryptAndUploadFile(form.frontPicture, aesKey, address);
+            m.tag = "front_id";
+            filesMeta.push(m);
+        }
+        if (form.backPicture) {
+            const m = await encryptAndUploadFile(form.backPicture, aesKey, address);
+            m.tag = "back_id";
+            filesMeta.push(m);
+        }
+        if (form.selfieWithId) {
+            const m = await encryptAndUploadFile(form.selfieWithId, aesKey, address);
+            m.tag = "selfie_with_id";
+            filesMeta.push(m);
+        }
+
+        const signWithViemWrapper = await createSignWrapper(walletClient, address);
+        const wrappedKeyForServer = await wrapAesKeyForServer(aesKey, SERVER_PUBLIC_KEY_PEM);
+
+        const { metadataCid, metadataHash, uploaderSignature } = await buildAndUploadMetadata({
+            aesKey,
+            encryptedFields: {
+                firstName: encFirst,
+                ...(encMiddle && { middleName: encMiddle }),
+                lastName: encLast,
+                issueDate: encIssue,
+                expiryDate: encExpiry,
+                idNumber: encId,
+            },
+            filesMeta,
+            signerAddress: address,
+            signWithViemWalletClient: signWithViemWrapper,
+            serverWrappedAesKey: wrappedKeyForServer,
+        });
+
+        // PATCH backend to update record (server will verify signature)
+        const updateUrl = `${BE_URL}/api/requests/${encodeURIComponent(
+            address
+        )}/${encodeURIComponent(requestId)}`;
+
+        const updateRes = await fetch(updateUrl, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ metadataCid, metadataHash, uploaderSignature, files: filesMeta }),
+        });
+
+        if (!updateRes.ok) {
+            const txt = await updateRes.text().catch(() => null);
+            throw new Error("update failed: " + txt);
+        }
+
+        toast.success("Request updated successfully");
+        if (onSuccess) onSuccess();
+    } catch (err) {
+        console.error("updateNationalId error:", err);
+        toast.error("Failed to update request. Please try again.");
+        if (onError) onError(err);
+    } finally {
+        if (setIsSubmitting) setIsSubmitting(false);
+    }
+}
+
+export async function updateLandTitle(
+    requestId: string,
+    form: LandTitleForm,
+    opts: SubmitOptions
+) {
+    const {
+        address,
+        walletClient,
+        BE_URL,
+        onSuccess,
+        onError,
+        setIsSubmitting,
+        toast,
+    } = opts;
+
+    try {
+        if (setIsSubmitting) setIsSubmitting(true);
+        if (!address) {
+            toast.error("Please connect your wallet before updating.");
+            return;
+        }
+
+        const aesKey = await genAesKey();
+
+        const encFirst = await encryptField(aesKey, form.firstName);
+        const encMiddle = form.middleName
+            ? await encryptField(aesKey, form.middleName)
+            : undefined;
+        const encLast = await encryptField(aesKey, form.lastName);
+        const encLat = await encryptField(aesKey, String(form.latitude));
+        const encLng = await encryptField(aesKey, String(form.longitude));
+        const encTitle = await encryptField(aesKey, form.titleNumber);
+        const encArea = await encryptField(aesKey, form.lotArea);
+
+        const filesMeta: Array<any> = [];
+        if (form.deedUpload) {
+            const deedMeta = await encryptAndUploadFile(form.deedUpload, aesKey, address);
+            deedMeta.tag = "land_deed";
+            filesMeta.push(deedMeta);
+        }
+
+        const signWithViemWrapper = await createSignWrapper(walletClient, address);
+        const wrappedKeyForServer = await wrapAesKeyForServer(aesKey, SERVER_PUBLIC_KEY_PEM);
+
+        const { metadataCid, metadataHash, uploaderSignature } = await buildAndUploadMetadata({
+            aesKey,
+            encryptedFields: {
+                firstName: encFirst,
+                ...(encMiddle && { middleName: encMiddle }),
+                lastName: encLast,
+                latitude: encLat,
+                longitude: encLng,
+                titleNumber: encTitle,
+                lotArea: encArea,
+            },
+            filesMeta,
+            signerAddress: address,
+            signWithViemWalletClient: signWithViemWrapper,
+            serverWrappedAesKey: wrappedKeyForServer,
+        });
+
+        const updateUrl = `${BE_URL}/api/requests/${encodeURIComponent(address)}/${encodeURIComponent(requestId)}`;
+
+        const updateRes = await fetch(updateUrl, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ metadataCid, metadataHash, uploaderSignature, files: filesMeta }),
+        });
+
+        if (!updateRes.ok) {
+            const txt = await updateRes.text().catch(() => null);
+            throw new Error("update failed: " + txt);
+        }
+
+        toast.success("Request updated successfully");
+        if (onSuccess) onSuccess();
+    } catch (err) {
+        console.error("updateLandTitle error:", err);
+        toast.error("Failed to update request. Please try again.");
         if (onError) onError(err);
     } finally {
         if (setIsSubmitting) setIsSubmitting(false);

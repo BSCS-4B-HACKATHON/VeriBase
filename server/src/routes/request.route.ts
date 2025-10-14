@@ -12,4 +12,16 @@ requestRouter.get(
     requestController.GetRequestByIdHandler
 );
 
+// update request (uploader updates metadata/files)
+requestRouter.patch(
+    "/:requesterWallet/:requestId",
+    requestController.UpdateRequestHandler
+);
+
+// delete request (uploader deletes their request)
+requestRouter.delete(
+    "/:requesterWallet/:requestId",
+    requestController.DeleteRequestHandler
+);
+
 export default requestRouter;

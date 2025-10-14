@@ -1,5 +1,6 @@
 "use client";
 
+import { set } from "date-fns";
 import React, {
     createContext,
     useContext,
@@ -7,8 +8,8 @@ import React, {
     useMemo,
     useState,
 } from "react";
-import { createWalletClient, custom, type WalletClient } from "viem";
-import { mainnet } from "viem/chains";
+import { createWalletClient, custom, http, type WalletClient } from "viem";
+import { baseSepolia, mainnet } from "viem/chains";
 
 declare global {
     interface Window {
@@ -17,7 +18,7 @@ declare global {
     }
 }
 
-type ProviderName = "metamask" | "coinbase" | "injected";
+type ProviderName = "metamask" | "coinbase wallet" | "injected";
 
 type WalletContextValue = {
     address: string | null;
@@ -115,26 +116,147 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (typeof window === "undefined") return;
         const injected = (window as any).ethereum;
         if (!injected) {
-            alert("No injected wallet found (MetaMask/Coinbase).");
+            console.error("No injected ethereum provider found");
             return;
+        }
+
+        // If multiple wallets are injected, choose the one the user requested.
+        // Use a deterministic scoring function so the requested wallet wins.
+        let chosenProvider = injected;
+        try {
+            const providers = Array.isArray(injected.providers)
+                ? injected.providers
+                : null;
+            if (providers && providers.length) {
+                console.debug(
+                    "detected injected.providers (brief):",
+                    providers.map((p: any) => ({
+                        ctor: p?.constructor?.name,
+                        flags: {
+                            isMetaMask: !!p.isMetaMask,
+                            _isMetaMask: !!p._isMetaMask,
+                            isCoinbaseWallet: !!p.isCoinbaseWallet,
+                            isCoinbaseBrowser: !!p.isCoinbaseBrowser,
+                            isPhantom: !!p.isPhantom,
+                        },
+                    }))
+                );
+
+                const scoreProvider = (
+                    p: any,
+                    target: "metamask" | "coinbase" | "any"
+                ) => {
+                    let score = 0;
+                    const ctor = String(
+                        p?.constructor?.name || ""
+                    ).toLowerCase();
+                    const keys = String(Object.keys(p || [])).toLowerCase();
+                    const hasRequest = typeof p.request === "function";
+
+                    // positive signals
+                    if (p.isMetaMask) score += 100;
+                    if (p._isMetaMask) score += 80;
+                    if (ctor.includes("metamask") || keys.includes("metamask"))
+                        score += 40;
+                    if (p.isCoinbaseWallet) score += 100;
+                    if (p.isCoinbaseBrowser) score += 80;
+                    if (ctor.includes("coinbase") || keys.includes("coinbase"))
+                        score += 40;
+                    if (hasRequest) score += 10;
+
+                    // negative signals (avoid Phantom/Solana/non-EVM)
+                    if (p.isPhantom) score -= 200;
+                    if (p.isSolana) score -= 200;
+                    if (ctor.includes("phantom") || keys.includes("phantom"))
+                        score -= 150;
+
+                    // bias for target: boost target positive, penalize competing wallet
+                    if (target === "metamask") {
+                        if (p.isCoinbaseWallet || p.isCoinbaseBrowser)
+                            score -= 80;
+                    } else if (target === "coinbase") {
+                        if (p.isMetaMask || p._isMetaMask) score -= 80;
+                    }
+                    return score;
+                };
+
+                const target = providerName.toLowerCase().includes("coinbase")
+                    ? "coinbase"
+                    : providerName.toLowerCase().includes("metamask")
+                    ? "metamask"
+                    : "any";
+
+                // score all providers and pick highest
+                let best: any = null;
+                let bestScore = -Infinity;
+                for (const p of providers) {
+                    const s = scoreProvider(p, target as any);
+                    console.debug("provider score", {
+                        ctor: p?.constructor?.name,
+                        score: s,
+                    });
+                    if (s > bestScore) {
+                        bestScore = s;
+                        best = p;
+                    }
+                }
+
+                if (best && bestScore > -100) {
+                    chosenProvider = best;
+                } else {
+                    chosenProvider = injected;
+                }
+
+                console.debug("chosenProvider final:", {
+                    ctor: chosenProvider?.constructor?.name,
+                    bestScore,
+                    isMetaMask:
+                        !!chosenProvider?.isMetaMask ||
+                        !!chosenProvider?._isMetaMask,
+                    isCoinbaseWallet:
+                        !!chosenProvider?.isCoinbaseWallet ||
+                        !!chosenProvider?.isCoinbaseBrowser,
+                });
+            }
+        } catch (e) {
+            console.warn(
+                "provider selection failed, falling back to injected",
+                e
+            );
+            chosenProvider = injected;
         }
 
         try {
             setConnecting(true);
-            const accounts: string[] = await injected.request({
+
+            // optional try to request permissions (may be unsupported)
+            try {
+                await chosenProvider.request?.({
+                    method: "wallet_requestPermissions",
+                    params: [{ eth_accounts: {} }],
+                });
+            } catch (error) {
+                console.warn("wallet_requestPermissions (ignored):", error);
+            }
+
+            // ask the chosen provider for accounts (this will open the right wallet UI)
+            const accounts: string[] = await chosenProvider.request({
                 method: "eth_requestAccounts",
             });
+
             const acc = accounts?.[0] ?? null;
             if (!acc) throw new Error("No account returned");
 
             // init viem client if not set
             try {
                 const wc = createWalletClient({
-                    transport: custom(injected),
-                    chain: mainnet,
+                    transport: custom(chosenProvider),
+                    chain: baseSepolia,
                 });
                 setWalletClient(wc as WalletClient);
                 (window as any).walletClient = wc;
+                // persist which specific injected provider we selected so future actions use it
+                setProvider(chosenProvider);
             } catch (err) {
                 console.warn("viem createWalletClient failed:", err);
             }
@@ -145,6 +267,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             window.dispatchEvent(new CustomEvent("vb_wallet_connect"));
         } catch (err) {
             console.error("connect failed", err);
+            setAddress(null);
+            localStorage.removeItem("vb_address");
+            localStorage.removeItem("vb_provider");
+            window.dispatchEvent(new CustomEvent("vb_wallet_disconnect"));
             throw err;
         } finally {
             setConnecting(false);
@@ -152,20 +278,33 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
 
     const clearSiteData = async () => {
+        // remove all cookies and local storage and cache
         try {
-            if ("caches" in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map((k) => caches.delete(k)));
+            if ("clearSiteData" in navigator) {
+                // @ts-ignore
+                await navigator.clearSiteData({
+                    cache: true,
+                    cookies: true,
+                    storage: true,
+                    executionContexts: true,
+                });
             }
         } catch (err) {
             console.warn("clearSiteData failed:", err);
         }
         try {
-            localStorage.removeItem("vb_address");
-            localStorage.removeItem("vb_provider");
+            // best-effort clear cookies
+            const cookies = document.cookie.split(";");
+            for (const cookie of cookies) {
+                const eqPos = cookie.indexOf("=");
+                const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+                document.cookie =
+                    name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            }
+            console.log("Cookies cleared");
         } catch {}
         try {
-            sessionStorage.removeItem("connectedAccount");
+            localStorage.clear();
         } catch {}
     };
 
@@ -209,6 +348,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             setAddress(null);
             setWalletClient(null);
             window.dispatchEvent(new CustomEvent("vb_wallet_disconnect"));
+            window.location.reload();
         } catch (err) {
             console.warn("disconnect error:", err);
         }

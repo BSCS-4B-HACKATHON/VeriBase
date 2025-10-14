@@ -21,12 +21,13 @@ export default function ConnectWallet() {
   const { address, connecting, connect, disconnectWallet } = useWallet();
   const [copied, setCopied] = useState(false);
 
-  const handleConnect = async (providerName: "metamask" | "coinbase") => {
+  const handleConnect = async (
+    providerName: "metamask" | "coinbase wallet"
+  ) => {
     try {
       await connect(providerName);
     } catch (err) {
       console.error("connect failed", err);
-      alert("Connection failed");
     }
   };
 
@@ -186,7 +187,7 @@ export default function ConnectWallet() {
 
           <Button
             type="button"
-            onClick={() => handleConnect("coinbase")}
+            onClick={() => handleConnect("coinbase wallet")}
             disabled={connecting}
             className="bg-white text-black hover:bg-gray-200 px-6 h-12 rounded-lg cursor-pointer font-mono"
           >

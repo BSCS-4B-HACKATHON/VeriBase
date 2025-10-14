@@ -1,1 +1,0 @@
-# Proof Of Ownership Project
