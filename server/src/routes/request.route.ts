@@ -18,4 +18,10 @@ requestRouter.patch(
     requestController.UpdateRequestHandler
 );
 
+// delete request (uploader deletes their request)
+requestRouter.delete(
+    "/:requesterWallet/:requestId",
+    requestController.DeleteRequestHandler
+);
+
 export default requestRouter;

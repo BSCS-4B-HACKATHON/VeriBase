@@ -41,12 +41,33 @@ export default function RequestCard({
 
     const handleDelete = async (e?: React.SyntheticEvent) => {
         e?.stopPropagation();
-        if (!confirm("Are you sure you want to delete this request?")) return;
         try {
             setIsLoading(true);
-            // replace with real API call to delete request
-            // await fetch(`/api/requests/${request.requestId}`, { method: "DELETE" });
+
+            const BE_URL = process.env.NEXT_PUBLIC_BE_URL || "";
+            if (!BE_URL) {
+                throw new Error("backend url not configured");
+            }
+
+            const url = `${BE_URL}/api/requests/${encodeURIComponent(
+                request.requesterWallet
+            )}/${encodeURIComponent(request.requestId)}`;
+
+            const res = await fetch(url, {
+                method: "DELETE",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (!res.ok) {
+                const body = await res.text().catch(() => null);
+                throw new Error(`delete failed ${res.status} ${body ?? ""}`);
+            }
+
             toast.success("Request deleted");
+            // optional: navigate or refresh list
+            // for now, reload the page so UI reflects deletion
+            setTimeout(() => window.location.reload(), 400);
         } catch (err) {
             console.error("delete failed", err);
             toast.error("Failed to delete request");

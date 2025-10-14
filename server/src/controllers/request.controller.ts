@@ -498,3 +498,58 @@ export async function UpdateRequestHandler(req: Request, res: Response) {
         return res.status(500).json({ ok: false, error: "internal_error" });
     }
 }
+
+export async function DeleteRequestHandler(req: Request, res: Response) {
+    try {
+        const { requesterWallet, requestId } = req.params;
+        if (!requestId || !requesterWallet) {
+            return res.status(400).json({ ok: false, error: "missing params" });
+        }
+
+        const recordDoc = await RequestModel.findOne({ requestId: requestId });
+        if (!recordDoc)
+            return res
+                .status(404)
+                .json({ ok: false, error: "request not found" });
+
+        // ensure wallet matches
+        if (
+            String(recordDoc.requesterWallet).toLowerCase() !==
+            String(requesterWallet).toLowerCase()
+        ) {
+            return res.status(403).json({ ok: false, error: "access denied" });
+        }
+
+        // build list of cids to delete (files + metadata)
+        const cids: string[] = [];
+        if (Array.isArray(recordDoc.files)) {
+            for (const f of recordDoc.files) {
+                if (f && f.cid) cids.push(String(f.cid));
+            }
+        }
+        if (recordDoc.metadataCid) cids.push(String(recordDoc.metadataCid));
+
+        // attempt to unpin/delete from pinata (best-effort)
+        let delResults: any = [];
+        try {
+            delResults = await storage.deleteCidsBestEffort(cids);
+        } catch (err) {
+            console.warn("DeleteRequestHandler: pinata delete error", err);
+        }
+
+        // remove DB record
+        try {
+            await RequestModel.deleteOne({ requestId: requestId });
+        } catch (err) {
+            console.error("failed to delete DB record", err);
+            return res
+                .status(500)
+                .json({ ok: false, error: "failed_delete_db", delResults });
+        }
+
+        return res.status(200).json({ ok: true, delResults });
+    } catch (err) {
+        console.error("DeleteRequestHandler error:", err);
+        return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+}
