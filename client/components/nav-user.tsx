@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { IconDotsVertical, IconLogout, IconWallet } from "@tabler/icons-react";
+import { IconDotsVertical, IconLogout } from "@tabler/icons-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,7 +16,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import { useRouter } from "next/dist/client/components/navigation";
+import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 
 function shorten(addr?: string | null) {
@@ -25,63 +25,38 @@ function shorten(addr?: string | null) {
 }
 
 export function NavUser() {
-  const { disconnectWallet } = useWallet();
+  const { address, isConnected, disconnectWallet } = useWallet();
   const router = useRouter();
-  const [address, setAddress] = useState<string | null>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("vb_address") : null
-  );
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Debug logging
+  useEffect(() => {
+    console.log("NavUser state:", {
+      mounted,
+      isConnected,
+      address: address?.slice(0, 10),
+    });
+  }, [mounted, isConnected, address]);
+
   const avatarSrc = null; // replace with ENS/avatar fetch if you add it later
 
-  // perform redirect when address becomes null
+  // Only redirect if mounted AND definitively not connected
+  // Wagmi's isConnected will be true if wallet is reconnected
   useEffect(() => {
-    if (!address) {
+    if (mounted && !isConnected) {
+      console.log("NavUser: Not connected after mount, redirecting...");
       router.replace("/");
     }
-  }, [address, router]);
-
-  useEffect(() => {
-    const onDisconnect = () => setAddress(null);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "vb_address")
-        setAddress(localStorage.getItem("vb_address"));
-    };
-    const onConnectEvent = () => setAddress(localStorage.getItem("vb_address"));
-
-    window.addEventListener(
-      "vb_wallet_disconnect",
-      onDisconnect as EventListener
-    );
-    window.addEventListener(
-      "vb_wallet_connect",
-      onConnectEvent as EventListener
-    );
-    window.addEventListener("storage", onStorage);
-
-    return () => {
-      window.removeEventListener(
-        "vb_wallet_disconnect",
-        onDisconnect as EventListener
-      );
-      window.removeEventListener(
-        "vb_wallet_connect",
-        onConnectEvent as EventListener
-      );
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
+  }, [isConnected, mounted, router]);
 
   const handleDisconnect = async () => {
     await disconnectWallet();
-    setAddress(null);
-
-    // Redirect to home page after disconnecting
+    // Wagmi will handle the state update, just redirect
     router.replace("/");
-    return;
   };
 
   return (
