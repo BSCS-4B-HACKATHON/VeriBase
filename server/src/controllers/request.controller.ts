@@ -8,6 +8,120 @@ import {
     decryptFileToSignedUrl,
 } from "../utils/helpers";
 
+// New: update handler
+export async function UpdateRequestHandler(req: Request, res: Response) {
+    try {
+        const { requesterWallet, requestId } = req.params;
+        const { metadataCid, metadataHash, uploaderSignature, files } =
+            req.body;
+
+        if (!requestId || !requesterWallet) {
+            return res.status(400).json({ ok: false, error: "missing params" });
+        }
+
+        if (!metadataCid || !metadataHash || !uploaderSignature) {
+            return res
+                .status(400)
+                .json({ ok: false, error: "missing body fields" });
+        }
+
+        // fetch existing record
+        const recordDoc = await RequestModel.findOne({ requestId: requestId });
+        if (!recordDoc)
+            return res
+                .status(404)
+                .json({ ok: false, error: "request not found" });
+
+        // check wallet matches
+        if (
+            String(recordDoc.requesterWallet).toLowerCase() !==
+            String(requesterWallet).toLowerCase()
+        ) {
+            return res.status(403).json({ ok: false, error: "access denied" });
+        }
+
+        // verify signature matches requester and metadataHash
+        let recovered: string;
+        try {
+            recovered = (await recoverMessageAddress({
+                message: metadataHash,
+                signature: uploaderSignature,
+            })) as string;
+        } catch (err) {
+            console.error("Signature recovery error:", err);
+            return res
+                .status(400)
+                .json({ ok: false, error: "invalid signature format" });
+        }
+
+        if (recovered.toLowerCase() !== String(requesterWallet).toLowerCase()) {
+            return res
+                .status(401)
+                .json({ ok: false, error: "signature mismatch" });
+        }
+
+        // sanitize files
+        const sanitizedFiles = Array.isArray(files)
+            ? files.map((f: any) => ({
+                  cid: String(f.cid),
+                  filename: f.filename ? String(f.filename) : undefined,
+                  mime: f.mime ? String(f.mime) : undefined,
+                  size: f.size ? Number(f.size) : undefined,
+                  iv: f.iv ? String(f.iv) : undefined,
+                  ciphertextHash: f.ciphertextHash
+                      ? String(f.ciphertextHash)
+                      : undefined,
+                  tag: f.tag ? String(f.tag) : undefined,
+              }))
+            : [];
+
+        // capture previous CIDs to delete AFTER successful update
+        const previousCids = Array.isArray(recordDoc.files)
+            ? recordDoc.files.map((f: any) => f.cid).filter(Boolean)
+            : [];
+        // include previous metadataCid as well (if present and different)
+        if (recordDoc.metadataCid && recordDoc.metadataCid !== metadataCid) {
+            previousCids.push(recordDoc.metadataCid);
+        }
+
+        // update record
+        recordDoc.metadataCid = metadataCid;
+        recordDoc.metadataHash = metadataHash;
+        recordDoc.uploaderSignature = uploaderSignature;
+        // coerce to any to avoid strict schema typing issues for optional filename fields
+        recordDoc.files = sanitizedFiles as any;
+        await recordDoc.save();
+
+        // attempt to delete previous files from Pinata if configured (best-effort)
+        try {
+            const delResults = await storage.deleteCidsBestEffort(
+                previousCids as any
+            );
+            if (Array.isArray(delResults)) {
+                for (const r of delResults) {
+                    if (r.ok) {
+                        console.log(
+                            `unpin success for ${r.cid} status=${r.status}`
+                        );
+                    } else {
+                        console.warn(
+                            `unpin failed for ${r.cid}`,
+                            r.error ?? r.body ?? r.status
+                        );
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("failed to delete previous cids (best-effort)", err);
+        }
+
+        return res.status(200).json({ ok: true });
+    } catch (err) {
+        console.error("UpdateRequestHandler error:", err);
+        return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+}
+
 export async function CreateRequestHandler(req: Request, res: Response) {
     try {
         const {

@@ -18,7 +18,7 @@ import { submitLandTitle, submitNationalId } from "@/lib/request-submit";
 import FileInputField from "@/components/file-input-field";
 
 export default function NewRequestPage() {
-    const { disconnectWallet } = useWallet();
+    const { disconnectWallet, address: walletAddress } = useWallet();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState("national-id");
@@ -155,6 +155,13 @@ export default function NewRequestPage() {
     const handleSubmitNationalId = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+
+        if (!address) {
+            toast.error("Wallet not connected");
+            setIsSubmitting(false);
+            return;
+        }
+
         await submitNationalId(nationalIdForm, {
             address,
             walletClient,
@@ -168,6 +175,13 @@ export default function NewRequestPage() {
     const handleSubmitLandTitle = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+
+        if (!address) {
+            toast.error("Wallet not connected");
+            setIsSubmitting(false);
+            return;
+        }
+
         await submitLandTitle(landTitleForm, {
             address,
             walletClient,

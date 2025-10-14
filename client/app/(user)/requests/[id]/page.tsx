@@ -30,7 +30,22 @@ import {
 import { getRequestById } from "@/lib/request";
 import { useWallet } from "@/app/context/walletContext";
 import { useParams } from "next/navigation";
-import { findFileUrl } from "@/lib/helpers";
+import {
+    BE_URL,
+    buildAndUploadMetadata,
+    encryptAndUploadFile,
+    encryptField,
+    findFileUrl,
+    genAesKey,
+    SERVER_PUBLIC_KEY_PEM,
+    wrapAesKeyForServer,
+} from "@/lib/helpers";
+import {
+    createSignWrapper,
+    submitNationalId,
+    updateLandTitle,
+    updateNationalId,
+} from "@/lib/request-submit";
 
 type RequestStatus = "pending" | "verified" | "rejected";
 type RequestType = "national-id" | "land-title";
@@ -69,7 +84,7 @@ interface RequestData {
 }
 
 export default function RequestPage() {
-    const { address } = useWallet();
+    const { address, walletClient } = useWallet();
     const { id } = useParams();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
@@ -191,15 +206,133 @@ export default function RequestPage() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            if (!editedData || !requestData) {
+                toast.error("No changes to save");
+                return;
+            }
+            if (!address || !walletClient) {
+                toast.error("Wallet not connected");
+                return;
+            }
+            if (requestData.status !== "pending") {
+                toast.error("Only pending requests can be edited");
+                return;
+            }
 
-            setRequestData(editedData);
-            setIsEditMode(false);
-            toast.success("Request updated successfully");
-        } catch (error) {
-            toast.error("Failed to update request");
-            console.error(error);
+            // Convert a data URL, remote URL or File into a File object (or null)
+            const convertToFile = async (
+                val: string | File | null | undefined,
+                filename: string
+            ): Promise<File | null> => {
+                if (!val) return null;
+                if (val instanceof File) return val;
+                if (typeof val === "string") {
+                    // data URL (base64)
+                    if (val.startsWith("data:")) {
+                        const arr = val.split(",");
+                        const mimeMatch = arr[0].match(/:(.*?);/);
+                        const mime = mimeMatch
+                            ? mimeMatch[1]
+                            : "application/octet-stream";
+                        const bstr = atob(arr[1]);
+                        let n = bstr.length;
+                        const u8arr = new Uint8Array(n);
+                        while (n--) {
+                            u8arr[n] = bstr.charCodeAt(n);
+                        }
+                        return new File([u8arr], filename, { type: mime });
+                    } else {
+                        // try to fetch remote url and convert to blob
+                        try {
+                            const res = await fetch(val);
+                            const blob = await res.blob();
+                            return new File([blob], filename, {
+                                type: blob.type || "application/octet-stream",
+                            });
+                        } catch (err) {
+                            console.warn(
+                                "convertToFile: failed to fetch remote url",
+                                err
+                            );
+                            return null;
+                        }
+                    }
+                }
+                return null;
+            };
+
+            if (editedData.type === "national-id") {
+                const nid = editedData.nationalIdData!;
+                const form = {
+                    firstName: nid.firstName,
+                    middleName: nid.middleName,
+                    lastName: nid.lastName,
+                    issueDate: nid.issueDate,
+                    expiryDate: nid.expiryDate,
+                    idNumber: nid.idNumber,
+                    frontPicture: await convertToFile(
+                        nid.frontPicture,
+                        "front.jpg"
+                    ),
+                    backPicture: await convertToFile(
+                        nid.backPicture,
+                        "back.jpg"
+                    ),
+                    selfieWithId: await convertToFile(
+                        nid.selfieWithId,
+                        "selfie.jpg"
+                    ),
+                };
+
+                await updateNationalId(id as string, form, {
+                    address,
+                    walletClient,
+                    BE_URL,
+                    toast: {
+                        success: function (s: string): void {
+                            toast.success(s);
+                        },
+                        error: function (s: string): void {
+                            throw new Error("Function not implemented.");
+                        },
+                    },
+                });
+                window.location.reload();
+                return;
+            } else if (editedData.type === "land-title") {
+                const ltd = editedData.landTitleData!;
+                const form = {
+                    firstName: ltd.firstName,
+                    middleName: ltd.middleName,
+                    lastName: ltd.lastName,
+                    latitude: ltd.latitude,
+                    longitude: ltd.longitude,
+                    titleNumber: ltd.titleNumber,
+                    lotArea: ltd.lotArea,
+                    deedUpload: await convertToFile(ltd.deedUpload, "deed.jpg"),
+                };
+                await updateLandTitle(id as string, form, {
+                    address,
+                    walletClient,
+                    BE_URL,
+                    toast: {
+                        success: function (s: string): void {
+                            toast.success(s);
+                        },
+                        error: function (s: string): void {
+                            throw new Error("Function not implemented.");
+                        },
+                    },
+                });
+                window.location.reload();
+                return;
+            } else {
+                toast.error("Unknown request type");
+                return;
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to save changes");
         } finally {
             setIsSaving(false);
         }

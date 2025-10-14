@@ -12,4 +12,10 @@ requestRouter.get(
     requestController.GetRequestByIdHandler
 );
 
+// update request (uploader updates metadata/files)
+requestRouter.patch(
+    "/:requesterWallet/:requestId",
+    requestController.UpdateRequestHandler
+);
+
 export default requestRouter;

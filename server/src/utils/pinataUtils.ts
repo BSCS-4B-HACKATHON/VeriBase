@@ -70,3 +70,57 @@ export async function fetchFileStreamByCid(cidOrUrl: string): Promise<Buffer> {
     const ab = await res.arrayBuffer();
     return Buffer.from(ab);
 }
+
+/**
+ * Best-effort deletion of CIDs using Pinata API if API credentials are configured.
+ * This will attempt to call Pinata's unpin endpoint for each CID. If no API
+ * credentials exist, this function resolves without doing anything.
+ */
+export async function deleteCidsBestEffort(cids: string[] | undefined) {
+    if (!Array.isArray(cids) || cids.length === 0) return [];
+
+    const results: Array<{
+        cid: string;
+        ok: boolean;
+        status?: number;
+        body?: any;
+        error?: any;
+    }> = [];
+
+    for (const cid of cids) {
+        try {
+            const url = `https://api.pinata.cloud/pinning/unpin/${cid}`;
+            const headers: Record<string, string> = {
+                Accept: "application/json",
+            };
+
+            if (PINATA_JWT) {
+                headers["Authorization"] = `Bearer ${PINATA_JWT}`;
+            } else if (PINATA_API_KEY && PINATA_API_SECRET) {
+                headers["pinata_api_key"] = PINATA_API_KEY;
+                headers["pinata_secret_api_key"] = PINATA_API_SECRET;
+            } else {
+                // no credentials available — nothing we can do
+                results.push({
+                    cid,
+                    ok: false,
+                    error: "no_pinata_credentials",
+                });
+                continue;
+            }
+
+            const res = await fetch(url, { method: "DELETE", headers });
+            let body: any = null;
+            try {
+                body = await res.text();
+            } catch (e) {
+                body = null;
+            }
+            results.push({ cid, ok: res.ok, status: res.status, body });
+        } catch (err) {
+            results.push({ cid, ok: false, error: err });
+        }
+    }
+
+    return results;
+}

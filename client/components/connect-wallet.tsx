@@ -5,12 +5,13 @@ import { useWallet } from "@/app/context/walletContext";
 export default function ConnectWallet() {
     const { address, connecting, connect, disconnectWallet } = useWallet();
 
-    const handleConnect = async (providerName: "metamask" | "coinbase") => {
+    const handleConnect = async (
+        providerName: "metamask" | "coinbase wallet"
+    ) => {
         try {
             await connect(providerName);
         } catch (err) {
             console.error("connect failed", err);
-            alert("Connection failed");
         }
     };
 
@@ -51,7 +52,7 @@ export default function ConnectWallet() {
 
                     <button
                         type="button"
-                        onClick={() => handleConnect("coinbase")}
+                        onClick={() => handleConnect("coinbase wallet")}
                         disabled={connecting}
                         className="px-3 py-1 rounded-md bg-[#2D9CDB] hover:brightness-95 text-white text-sm transition disabled:opacity-60"
                     >
