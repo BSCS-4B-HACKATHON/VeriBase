@@ -13,7 +13,7 @@ import { FileText, CreditCard, Upload, Loader2 } from "lucide-react";
 import { BE_URL } from "@/lib/helpers";
 import { createWalletClient, custom, WalletClient } from "viem";
 import { baseSepolia } from "viem/chains";
-import { useWallet } from "@/app/context/walletContext";
+import { useWallet } from "@/hooks/useWallet";
 import { submitLandTitle, submitNationalId } from "@/lib/request-submit";
 import FileInputField from "@/components/file-input-field";
 
