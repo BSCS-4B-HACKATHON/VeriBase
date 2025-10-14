@@ -1,0 +1,210 @@
+"use client";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import { Github, Twitter, Linkedin, MessageSquare, Shield } from "lucide-react";
+
+export function Footer() {
+  const currentYear = new Date().getFullYear();
+
+  const navigation = {
+    product: [
+      { name: "About", href: "#about" },
+      { name: "Features", href: "#features" },
+      { name: "Pricing", href: "#pricing" },
+      { name: "Documentation", href: "#docs" },
+    ],
+    company: [
+      { name: "Verify Land Title", href: "#verify" },
+      { name: "Verify National ID", href: "#verify-id" },
+      { name: "API Access", href: "#api" },
+      { name: "Contact", href: "#contact" },
+    ],
+    resources: [
+      { name: "Blog", href: "#blog" },
+      { name: "Support", href: "#support" },
+      { name: "Privacy Policy", href: "#privacy" },
+      { name: "Terms of Service", href: "#terms" },
+    ],
+  };
+
+  const socials = [
+    {
+      name: "Twitter",
+      href: "https://x.com/jackjack_eth",
+      icon: Twitter,
+    },
+    {
+      name: "GitHub",
+      href: "https://github.com",
+      icon: Github,
+    },
+    {
+      name: "LinkedIn",
+      href: "https://linkedin.com",
+      icon: Linkedin,
+    },
+    {
+      name: "Discord",
+      href: "https://discord.com",
+      icon: MessageSquare,
+    },
+  ];
+
+  return (
+    <footer className="relative bg-gradient-to-b from-[#0B1215]/50 to-[#0E161A]/50 border-t border-[#3ECF8E]/20">
+      {/* Gradient divider at top */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#3ECF8E]/40 to-transparent" />
+
+      {/* Subtle animated background pattern */}
+      <div className="absolute inset-0 opacity-[0.015]">
+        <div className="absolute inset-0 grid-pattern" />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-6 py-12 lg:px-8 lg:py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="xl:grid xl:grid-cols-3 xl:gap-8"
+        >
+          {/* Left: Logo + Tagline */}
+          <div className="space-y-4">
+            <Link href="/" className="group flex items-center gap-2">
+              <div className="relative">
+                <Shield className="h-8 w-8 text-[#3ECF8E] group-hover:text-[#3ECF8E]/80 transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.5)]" />
+              </div>
+              <span className="text-2xl font-bold text-white group-hover:text-[#3ECF8E] transition-colors duration-300">
+                VeriBase
+              </span>
+            </Link>
+            <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+              Proof of Ownership, Secured on the Blockchain.
+            </p>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="w-2 h-2 rounded-full bg-[#3ECF8E] animate-pulse" />
+              <span>Blockchain-verified & decentralized</span>
+            </div>
+          </div>
+
+          {/* Center: Navigation Links */}
+          <div className="mt-12 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
+            <div className="md:grid md:grid-cols-2 md:gap-8">
+              <div>
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                  Product
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {navigation.product.map((item) => (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className="text-sm text-gray-400 hover:text-[#3ECF8E] transition-colors duration-200 flex items-center gap-2 group"
+                      >
+                        <span className="w-0 h-px bg-[#3ECF8E] group-hover:w-4 transition-all duration-300" />
+                        {item.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-12 md:mt-0">
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                  Services
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {navigation.company.map((item) => (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className="text-sm text-gray-400 hover:text-[#3ECF8E] transition-colors duration-200 flex items-center gap-2 group"
+                      >
+                        <span className="w-0 h-px bg-[#3ECF8E] group-hover:w-4 transition-all duration-300" />
+                        {item.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="md:grid md:grid-cols-2 md:gap-8">
+              <div>
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                  Resources
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {navigation.resources.map((item) => (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className="text-sm text-gray-400 hover:text-[#3ECF8E] transition-colors duration-200 flex items-center gap-2 group"
+                      >
+                        <span className="w-0 h-px bg-[#3ECF8E] group-hover:w-4 transition-all duration-300" />
+                        {item.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-12 md:mt-0">
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
+                  Stay Updated
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Get the latest updates on blockchain verification.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="your@email.com"
+                    className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-[#3ECF8E]/50 transition-colors"
+                  />
+                  <button className="px-4 py-2 bg-[#3ECF8E]/10 border border-[#3ECF8E]/30 rounded-lg text-sm text-[#3ECF8E] hover:bg-[#3ECF8E]/20 transition-all duration-200 font-medium">
+                    Join
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Bottom: Social + Copyright */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="mt-12 border-t border-white/10 pt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-sm text-gray-500">
+            <p>© {currentYear} VeriBase. All rights reserved.</p>
+            <span className="hidden sm:inline text-gray-600">•</span>
+            <p className="text-xs">
+              Powered by decentralized verification technology.
+            </p>
+          </div>
+
+          {/* Social Icons */}
+          <div className="flex items-center gap-4">
+            {socials.map((social) => (
+              <Link
+                key={social.name}
+                href={social.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative"
+                aria-label={social.name}
+              >
+                <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-[#3ECF8E]/10 group-hover:border-[#3ECF8E]/30 transition-all duration-300 group-hover:scale-110">
+                  <social.icon className="w-4 h-4 text-gray-400 group-hover:text-[#3ECF8E] transition-colors duration-300" />
+                </div>
+                {/* Glow effect on hover */}
+                <div className="absolute inset-0 rounded-lg bg-[#3ECF8E]/0 group-hover:bg-[#3ECF8E]/5 blur-xl transition-all duration-300 -z-10" />
+              </Link>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </footer>
+  );
+}

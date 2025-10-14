@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletProvider } from "./context/walletContext";
+import { Footer } from "./(public)/_components/footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default async function RootLayout({
         >
           <WalletProvider>{children}</WalletProvider>
           <Toaster />
+          <Footer />
         </ThemeProvider>
       </body>
     </html>
