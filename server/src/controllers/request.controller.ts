@@ -8,6 +8,53 @@ import {
     decryptFileToSignedUrl,
 } from "../utils/helpers";
 
+// Simple in-memory cache for metadata JSON to avoid refetching the same CID repeatedly.
+const METADATA_CACHE_TTL = 60 * 1000; // 60s
+const metadataCache: Map<string, { ts: number; v: any }> = new Map();
+
+async function fetchJsonCached(cidOrUrl: string) {
+    if (!cidOrUrl) return null;
+    try {
+        const key = String(cidOrUrl);
+        const entry = metadataCache.get(key);
+        const now = Date.now();
+        if (entry && now - entry.ts < METADATA_CACHE_TTL) return entry.v;
+        const v = await storage.fetchJsonByCid(cidOrUrl);
+        metadataCache.set(key, { ts: now, v });
+        return v;
+    } catch (err) {
+        throw err;
+    }
+}
+
+// small concurrency mapper
+async function pMapWithLimit<T, R>(
+    items: T[],
+    limit: number,
+    iterator: (item: T) => Promise<R>
+) {
+    const results = new Array<R>(items.length);
+    let i = 0;
+    const workers: Promise<void>[] = [];
+    async function next() {
+        const idx = i++;
+        if (idx >= items.length) return;
+        try {
+            const r = await iterator(items[idx]);
+            results[idx] = r;
+        } catch (err) {
+            // preserve position with null
+            results[idx] = null as any;
+            console.warn("pMapWithLimit iterator error", err);
+        }
+        await next();
+    }
+    for (let w = 0; w < Math.min(limit, items.length); w++)
+        workers.push(next());
+    await Promise.all(workers);
+    return results;
+}
+
 export async function CreateRequestHandler(req: Request, res: Response) {
     try {
         const {
@@ -165,11 +212,11 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
                 ? recordDoc.toObject()
                 : JSON.parse(JSON.stringify(recordDoc));
 
-        // fetch metadata blob if present
+        // fetch metadata blob if present (use cached fetch to avoid repeated IPFS hits)
         let metadata: any = null;
         if (output.metadataCid) {
             try {
-                metadata = await storage.fetchJsonByCid(output.metadataCid);
+                metadata = await fetchJsonCached(output.metadataCid);
             } catch (err) {
                 console.warn(
                     "failed to fetch metadata CID",
@@ -299,28 +346,28 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
 
         // If we have an AES key, attempt to decrypt each file and produce a usable URL (data: or signed)
         if (rawAesKey && output.files.length) {
-            const filesOut: any[] = [];
-            for (const f of output.files) {
-                try {
-                    const encryptedStream = await storage.fetchFileStreamByCid(
-                        f.cid
-                    );
-                    // decryptFileToSignedUrl should use f.iv || f.meta?.iv to decrypt
-                    const signedUrl = await decryptFileToSignedUrl(
-                        encryptedStream,
-                        rawAesKey,
-                        f
-                    );
-                    filesOut.push({ ...f, decryptedUrl: signedUrl });
-                } catch (err) {
-                    console.warn("failed to decrypt file", f.cid, err);
-                    filesOut.push({
-                        ...f,
-                        decryptedUrl: null,
-                        decryptError: true,
-                    });
+            // parallelize fetch+decrypt with limited concurrency to avoid overwhelming IPFS/pinata
+            const concurrency = 3;
+            const filesOut = await pMapWithLimit(
+                output.files,
+                concurrency,
+                async (f: any) => {
+                    try {
+                        const encryptedStream =
+                            await storage.fetchFileStreamByCid(f.cid);
+                        // decryptFileToSignedUrl should use f.iv || f.meta?.iv to decrypt
+                        const signedUrl = await decryptFileToSignedUrl(
+                            encryptedStream,
+                            rawAesKey,
+                            f
+                        );
+                        return { ...f, decryptedUrl: signedUrl };
+                    } catch (err) {
+                        console.warn("failed to decrypt file", f.cid, err);
+                        return { ...f, decryptedUrl: null, decryptError: true };
+                    }
                 }
-            }
+            );
             output.files = filesOut;
         }
 
