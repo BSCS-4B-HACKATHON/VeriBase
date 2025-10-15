@@ -1,0 +1,11 @@
+# Placeholder for contract ABIs
+# Copy the compiled contract ABIs here after deployment:
+
+# From blockchain/artifacts/contracts/NationalIdNFT.sol/NationalIdNFT.json
+# To server/src/abis/NationalIdNFT.json
+
+# From blockchain/artifacts/contracts/LandOwnershipNFT.sol/LandOwnershipNFT.json
+# To server/src/abis/LandOwnershipNFT.json
+
+# Command to copy:
+# cp blockchain/artifacts/contracts/*/**.json server/src/abis/

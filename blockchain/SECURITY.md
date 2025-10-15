@@ -1,8 +1,13 @@
-# ProofNFT Security Documentation
+# NFT Contracts Security Documentation
 
 ## Overview
 
-ProofNFT is an ERC-721 implementation that stores keccak256 hashes representing proofs of off-chain data ownership. This document outlines security considerations, best practices, and recommendations for production deployment.
+This document covers security considerations for two NFT contracts:
+
+- **NationalIdNFT**: Soul-bound (non-transferable) identity verification NFT
+- **LandOwnershipNFT**: Transferable property ownership NFT with authorized transfer mechanism
+
+Both contracts store encrypted document metadata on-chain with IPFS references. This document outlines security considerations, best practices, and recommendations for production deployment.
 
 ---
 
@@ -21,225 +26,398 @@ ProofNFT is an ERC-721 implementation that stores keccak256 hashes representing 
 
 ### What is Stored On-Chain
 
-- **Token Ownership**: ERC-721 standard ownership records
-- **Keccak256 Hashes**: 32-byte hashes of off-chain data (bytes32)
-- **Events**: ProofMinted events linking addresses to hashes
+#### NationalIdNFT (Soul-bound)
+
+- **Token Ownership**: One NFT per wallet (immutable)
+- **Document Metadata**: Type, name, IPFS CID, timestamp
+- **Encrypted File References**: Ciphertext hashes, encryption metadata (IV, auth tag)
+- **Consent Records**: User consent version and timestamp
+- **Non-transferable**: Cannot be moved to another wallet
+
+#### LandOwnershipNFT (Transferable)
+
+- **Token Ownership**: Multiple NFTs per wallet allowed
+- **Document Metadata**: Same structure as NationalIdNFT
+- **Transfer Restrictions**: Only via authorized LandTransferContract
+- **Revocation Status**: Can be revoked by contract owner
+- **Multiple Files**: Can attach additional files to existing tokens
 
 ### What is NOT Stored On-Chain
 
-- Raw plaintext data
-- Personal identifying information (PII)
+- Raw plaintext documents
+- Unencrypted personal identifying information (PII)
 - Encryption keys
-- Metadata beyond the hash itself
+- Original file contents (stored on IPFS, encrypted)
+- Decryption passwords
 
 ### Trust Model
 
-- **Contract Owner**: Trusted backend server that authenticates users before minting
-- **Users**: Trust the server to mint only legitimate proofs
-- **Blockchain**: Provides immutable record of hash-ownership associations
+- **Contract Owner**: Trusted backend server that verifies documents before minting
+- **Users**: Trust the server to mint only after proper verification
+- **Blockchain**: Provides immutable record of document ownership
+- **IPFS**: Stores encrypted document files
+- **LandTransferContract**: Authorized to facilitate land ownership transfers with fee mechanism
 
 ---
 
 ## Threat Analysis
 
-### 1. Preimage Attacks
+### 1. File Encryption Security
 
-**Threat**: Attacker attempts to reverse-engineer the original data from the hash.
+**Threat**: Attacker gains access to encrypted files on IPFS.
 
 **Mitigation**:
-- Keccak256 is cryptographically secure and preimage-resistant
-- Hashes are 256-bit (2^256 possible values)
-- Practically impossible to brute-force
 
-**Residual Risk**: 
-- If source data has low entropy (e.g., "yes" or "no"), dictionary/rainbow table attacks possible
-- **Solution**: Always salt data before hashing (see recommendations below)
-
-### 2. Rainbow Table Attacks
-
-**Threat**: Attacker precomputes hashes of common data values and matches them against on-chain hashes.
-
-**Mitigation Implemented**:
-- Uniqueness guard prevents duplicate hashes
-- Contract prevents revealing which hashes are "common"
+- All files encrypted with AES-256-GCM before upload
+- Only ciphertext hashes stored on-chain
+- Encryption keys never touch blockchain
+- User-controlled decryption keys
 
 **Residual Risk**:
-- If data is predictable (e.g., sequential IDs), rainbow tables effective
-- **Solution**: Use salts and add sufficient entropy (see recommendations)
 
-### 3. Hash Collision
+- If encryption key is compromised, files can be decrypted
+- **Solution**: Implement key rotation and multi-layer encryption
 
-**Threat**: Two different data values produce the same hash.
+### 2. Soul-bound NFT Restrictions (NationalIdNFT)
 
-**Mitigation**:
-- Keccak256 has 256-bit output space
-- Collision resistance is cryptographically proven
-- Birthday paradox requires 2^128 hashes to have 50% collision probability
-
-**Assessment**: Negligible risk in practice
-
-### 4. Duplicate Hash Prevention
-
-**Threat**: Attacker mints multiple tokens with the same hash to claim multiple proofs.
+**Threat**: User attempts to transfer identity NFT to another wallet.
 
 **Mitigation Implemented**:
-```solidity
-mapping(bytes32 => bool) private _hashExists;
 
-if (_hashExists[hash]) revert HashAlreadyExists();
+```solidity
+// NationalIdNFT.sol
+function _update(address to, uint256 tokenId, address auth)
+    internal
+    virtual
+    override
+    returns (address)
+{
+    address from = _ownerOf(tokenId);
+    if (from != address(0) && to != address(0)) {
+        revert TransferNotAllowed();
+    }
+    return super._update(to, tokenId, auth);
+}
+```
+
+**Assessment**: Fully mitigated - transfers, approvals, and operator permissions all blocked
+
+### 3. One NFT Per Wallet Enforcement (NationalIdNFT)
+
+**Threat**: User attempts to mint multiple National ID NFTs.
+
+**Mitigation Implemented**:
+
+```solidity
+mapping(address => uint256) private _walletToTokenId;
+
+function mintNationalId(...) external onlyOwner {
+    if (_walletToTokenId[to] != 0) revert WalletAlreadyHasNationalId();
+    // ... minting logic
+}
 ```
 
 **Assessment**: Fully mitigated
+
+### 4. Unauthorized Land Transfers (LandOwnershipNFT)
+
+**Threat**: User attempts to directly transfer land NFT without going through authorized contract.
+
+**Mitigation Implemented**:
+
+```solidity
+function _update(address to, uint256 tokenId, address auth)
+    internal
+    override
+    returns (address)
+{
+    address from = _ownerOf(tokenId);
+
+    // Allow minting (from == 0) and burning (to == 0)
+    if (from == address(0) || to == address(0)) {
+        return super._update(to, tokenId, auth);
+    }
+
+    // Only authorized contract can transfer
+    if (msg.sender != transferContract) {
+        revert DirectTransferNotAllowed();
+    }
+
+    return super._update(to, tokenId, auth);
+}
+```
+
+**Assessment**: Only LandTransferContract can facilitate transfers with proper fee handling
 
 ### 5. Owner Key Compromise
 
 **Threat**: Backend server's private key is compromised.
 
 **Impact**:
-- Attacker can mint arbitrary proof tokens
-- Attacker can associate hashes with wrong addresses
-- Cannot modify existing tokens (immutable once minted)
+
+- Attacker can mint arbitrary NFTs
+- Attacker can revoke legitimate tokens
+- Attacker can add files to existing tokens
+- Cannot modify existing token metadata (immutable once minted)
+- Cannot transfer soul-bound NFTs (blocked at contract level)
 
 **Mitigation Recommendations**:
+
 - Use hardware security module (HSM) for key storage
 - Implement multi-signature wallet for owner role
 - Use role-based access control (RBAC) via OpenZeppelin's AccessControl
-- Implement time-locked minting operations
+- Implement rate limiting on minting operations
 - Monitor for unusual minting patterns
 
-### 6. Front-Running
+### 6. IPFS Availability
 
-**Threat**: Attacker observes pending minting transaction and front-runs it.
+**Threat**: IPFS content becomes unavailable.
 
-**Impact**: Limited - attacker cannot change the recipient or hash
-**Assessment**: Not applicable to owner-only minting
+**Impact**: Encrypted files cannot be retrieved (but metadata remains on-chain)
 
-### 7. Privacy Leakage
+**Mitigation**:
 
-**Threat**: On-chain hashes reveal information about users or data.
+- Pin files on multiple IPFS nodes
+- Use IPFS pinning services (Pinata, NFT.Storage, Web3.Storage)
+- Maintain backup copies off-chain
+- Consider Arweave for permanent storage
 
-**Analysis**:
-- All hashes are public and permanent
-- Observers can track which addresses own which hashes
-- If attacker knows the plaintext, they can verify it by computing the hash
-- Transaction metadata (timing, gas price) may leak patterns
+**Assessment**: Moderate risk - implement redundant pinning
 
-**Mitigation**: See Privacy Considerations section
+### 7. Metadata Immutability
+
+**Threat**: Need to update metadata after minting.
+
+**Current Design**: Core metadata is immutable, but additional files can be added
+
+**Mitigation**:
+
+```solidity
+function addFileToToken(uint256 tokenId, ...) external onlyOwner {
+    // Allows adding supplementary files without changing core metadata
+}
+```
+
+**Assessment**: Design trade-off - immutability ensures trust, file addition provides flexibility
 
 ---
 
 ## Best Practices
 
-### 1. Data Salting (CRITICAL)
+### 1. File Encryption (CRITICAL)
 
-**Problem**: Low-entropy data is vulnerable to dictionary attacks.
-
-**Solution**: Always salt data before hashing.
+**Always encrypt files before uploading to IPFS:**
 
 ```typescript
-// DON'T DO THIS:
-const hash = keccak256(toBytes("yes"));
+import { webcrypto } from "crypto";
 
-// DO THIS INSTEAD:
-const salt = process.env.HASH_SALT || "random-secure-salt-12345";
-const hash = keccak256(toBytes(`${data}:${salt}:${userAddress}`));
-```
+async function encryptFile(fileBuffer: Buffer, encryptionKey: Buffer) {
+  // Generate random IV (Initialization Vector)
+  const iv = webcrypto.getRandomValues(new Uint8Array(12));
 
-**Recommended Salt Structure**:
-```typescript
-const saltedData = `${plainData}:${globalSalt}:${userAddress}:${timestamp}`;
-const hash = keccak256(toBytes(saltedData));
-```
+  // Import the encryption key
+  const key = await webcrypto.subtle.importKey(
+    "raw",
+    encryptionKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"]
+  );
 
-**Salt Storage**:
-- Store global salt in secure environment variable
-- Never commit salts to version control
-- Use different salts for development/production
-- Consider per-user salts stored securely off-chain
+  // Encrypt file with AES-256-GCM
+  const ciphertext = await webcrypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv,
+      tagLength: 128, // Authentication tag length
+    },
+    key,
+    fileBuffer
+  );
 
-### 2. Entropy Enhancement
+  // Generate SHA-256 hash of ciphertext (stored on blockchain)
+  const ciphertextHash = await webcrypto.subtle.digest("SHA-256", ciphertext);
 
-Add sufficient entropy to all data:
-
-```typescript
-// Example: Document proof with high entropy
-const documentProof = {
-  userId: userAddress,
-  documentCid: "QmHash...",
-  documentHash: "0xabc123...",
-  timestamp: Date.now(),
-  nonce: crypto.randomBytes(32).toString('hex'),
-  salt: process.env.HASH_SALT,
-};
-
-const proofString = JSON.stringify(documentProof);
-const hash = keccak256(toBytes(proofString));
-```
-
-### 3. Server-Side Authentication
-
-Before minting, verify:
-1. User owns the wallet address
-2. User has uploaded valid documents
-3. Documents passed verification checks
-4. No duplicate requests
-
-```typescript
-// Example authentication flow
-async function mintProofForUser(userAddress: string, documentData: any) {
-  // 1. Verify user signature
-  const verified = await verifyUserSignature(userAddress, documentData);
-  if (!verified) throw new Error("Invalid signature");
-  
-  // 2. Check document verification status
-  const request = await getRequestFromDb(documentData.requestId);
-  if (request.status !== "verified") throw new Error("Not verified");
-  
-  // 3. Generate hash with salt
-  const hash = generateSecureHash(documentData, userAddress);
-  
-  // 4. Mint token
-  await proofNFT.ownerMintTo(userAddress, hash);
+  return {
+    ciphertext: Buffer.from(ciphertext),
+    ciphertextHash: `0x${Buffer.from(ciphertextHash).toString("hex")}`,
+    iv: Buffer.from(iv).toString("hex"),
+    algorithm: "AES-256-GCM",
+  };
 }
+
+// Upload encrypted file to IPFS
+async function uploadToIPFS(encryptedFile: Buffer) {
+  // Upload to Pinata/IPFS
+  const result = await pinata.upload(encryptedFile);
+  return result.cid; // Returns IPFS CID
+}
+```
+
+### 2. Server-Side Verification Flow
+
+Before minting, the backend must verify:
+
+```typescript
+async function mintNFTForUser(requestId: string, userWallet: string) {
+  // 1. Verify request exists and is verified
+  const request = await RequestModel.findOne({ requestId });
+  if (!request) throw new Error("Request not found");
+  if (request.status !== "verified") throw new Error("Not verified by admin");
+
+  // 2. Verify user owns the wallet
+  if (request.requesterWallet !== userWallet) {
+    throw new Error("Wallet mismatch");
+  }
+
+  // 3. Check for existing NFT (NationalIdNFT only)
+  if (request.requestType === "national_id") {
+    const hasNFT = await nationalIdNFT.read.hasNationalId([userWallet]);
+    if (hasNFT) throw new Error("User already has National ID NFT");
+  }
+
+  // 4. Prepare metadata from request files
+  // Files are ALREADY encrypted and stored on IPFS
+  // request.files contains: { cid, filename, ciphertextHash, iv, authTag }
+  const metadata = [
+    {
+      label: "document_type",
+      value: request.requestType,
+      encrypted: false,
+    },
+    ...request.files.map((file) => ({
+      label: file.filename,
+      value: file.ciphertextHash, // Hash of encrypted file
+      encrypted: true,
+    })),
+    {
+      label: "request_id",
+      value: requestId,
+      encrypted: false,
+    },
+  ];
+
+  // 5. Mint NFT using backend's admin wallet
+  const txHash = await nftService.mintNFT(request, userWallet, metadata);
+
+  // 6. Delete request from database (data now lives on blockchain)
+  await RequestModel.deleteOne({ requestId });
+
+  return {
+    txHash,
+    tokenId: result.tokenId,
+    note: "Request deleted from database. Data now on blockchain.",
+  };
+}
+```
+
+**Important**: Your files are **already encrypted** when stored in MongoDB:
+
+- ✅ Encrypted with AES-256-GCM before IPFS upload
+- ✅ `ciphertextHash` stored in database
+- ✅ No additional hashing/salting needed during minting
+- ✅ Blockchain stores the ciphertext hash from your DB
+
+### 3. Metadata Structure Best Practices
+
+**Consistent metadata format:**
+
+```typescript
+interface DocMeta {
+  label: string; // e.g., "document_type", "photo.jpg"
+  value: string; // e.g., "national_id", "0xhash..."
+  encrypted: boolean; // false for type, true for hashes
+}
+
+// Example metadata array
+const metadata: DocMeta[] = [
+  {
+    label: "document_type",
+    value: "national_id",
+    encrypted: false,
+  },
+  {
+    label: "id_photo.jpg",
+    value: "0xabc123...", // ciphertextHash
+    encrypted: true,
+  },
+  {
+    label: "request_id",
+    value: "REQ-123",
+    encrypted: false,
+  },
+];
 ```
 
 ### 4. Batch Minting Optimization
 
-For gas efficiency:
-- Batch multiple mints in single transaction
-- Limit batch size to prevent gas limit issues (50-100 items)
-- Use `ownerBatchMintTo` instead of multiple `ownerMintTo` calls
+For gas efficiency with LandOwnershipNFT:
 
 ```typescript
-// Efficient batching
-const BATCH_SIZE = 50;
+async function batchMintLandNFTs(requests: Request[]) {
+  const BATCH_SIZE = 50;
 
-for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-  const batch = entries.slice(i, i + BATCH_SIZE);
-  const recipients = batch.map(e => e.wallet);
-  const hashes = batch.map(e => e.hash);
-  
-  await proofNFT.ownerBatchMintTo(recipients, hashes);
+  for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+    const batch = requests.slice(i, i + BATCH_SIZE);
+
+    const recipients = batch.map((r) => r.requesterWallet);
+    const documentTypes = batch.map((r) => r.requestType);
+    const documentNames = batch.map((r) => `Property Deed ${r.requestId}`);
+    const ipfsCids = batch.map((r) => r.files[0].cid);
+    const ciphertextHashes = batch.map((r) => r.files[0].ciphertextHash);
+    const metadataSignatures = batch.map((r) => r.metadataHash || "0x");
+    const consentVersions = batch.map(() => "consent_v1");
+    const timestamps = batch.map(() => BigInt(Date.now()));
+
+    await landOwnershipNFT.write.batchMintLandOwnership([
+      recipients,
+      documentTypes,
+      documentNames,
+      ipfsCids,
+      ciphertextHashes,
+      metadataSignatures,
+      consentVersions,
+      timestamps,
+    ]);
+  }
 }
 ```
 
 ### 5. Event Monitoring
 
-Monitor ProofMinted events for:
-- Unusual minting patterns
-- Unexpected addresses
-- High-frequency minting
-- Gas anomalies
+Monitor contract events for security:
 
 ```typescript
-// Event monitoring example
-proofNFT.watchEvent.ProofMinted({
+// Monitor NationalIdNFT events
+nationalIdNFT.watchEvent.NationalIdMinted({
   onLogs: (logs) => {
     for (const log of logs) {
-      console.log(`Minted token ${log.args.tokenId} to ${log.args.to}`);
-      // Alert if unusual pattern detected
+      console.log(`National ID NFT minted:`);
+      console.log(`  Token ID: ${log.args.tokenId}`);
+      console.log(`  Owner: ${log.args.owner}`);
+      console.log(`  Document: ${log.args.documentName}`);
+
+      // Alert if unusual pattern
+      checkForAnomalies(log);
     }
-  }
+  },
+});
+
+// Monitor LandOwnershipNFT events
+landOwnershipNFT.watchEvent.LandOwnershipMinted({
+  onLogs: (logs) => {
+    // Similar monitoring
+  },
+});
+
+// Monitor revocations
+landOwnershipNFT.watchEvent.TokenRevoked({
+  onLogs: (logs) => {
+    for (const log of logs) {
+      console.log(`Token ${log.args.tokenId} revoked: ${log.args.reason}`);
+      notifyUser(log.args.tokenId, log.args.reason);
+    }
+  },
 });
 ```
 
@@ -247,122 +425,146 @@ proofNFT.watchEvent.ProofMinted({
 
 ## Recommended Enhancements
 
-### 1. Zero-Knowledge Proofs (ZK-SNARKs/ZK-STARKs)
+### 1. Multi-Signature Minting
 
-**Problem**: Current implementation requires revealing plaintext data to verify proof.
-
-**Solution**: Implement ZK proofs for verification without revealing data.
-
-**Libraries**:
-- [SnarkJS](https://github.com/iden3/snarkjs)
-- [Circom](https://docs.circom.io/)
-- [ZoKrates](https://zokrates.github.io/)
-
-**Example Flow**:
-```
-1. User generates ZK proof: "I know data D such that hash(D) = H"
-2. Contract verifies proof without seeing D
-3. Privacy preserved
-```
-
-**Implementation Sketch**:
-```solidity
-// Add ZK verifier
-import "./Verifier.sol";
-
-contract ProofNFTZK is ProofNFT {
-    Verifier public verifier;
-    
-    function verifyProofZK(
-        uint256 tokenId,
-        uint[2] memory a,
-        uint[2][2] memory b,
-        uint[2] memory c,
-        uint[1] memory input
-    ) external view returns (bool) {
-        bytes32 storedHash = _tokenHashes[tokenId];
-        return verifier.verifyProof(a, b, c, [uint(storedHash)]);
-    }
-}
-```
-
-### 2. Time-Bound Proofs
-
-Add expiration dates to proofs:
-
-```solidity
-mapping(uint256 => uint256) private _tokenExpiry;
-
-function verifyProof(
-    address claimer,
-    uint256 tokenId,
-    bytes calldata plainData
-) external view returns (bool) {
-    // Check expiration
-    if (_tokenExpiry[tokenId] > 0 && block.timestamp > _tokenExpiry[tokenId]) {
-        return false;
-    }
-    
-    // ... existing verification logic
-}
-```
-
-### 3. Multi-Signature Minting
-
-Replace single owner with multi-sig:
+Replace single owner with multi-sig for production:
 
 ```solidity
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract ProofNFTMultiSig is ProofNFT, AccessControl {
+contract NationalIdNFTMultiSig is NationalIdNFT, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+
     constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
     }
-    
-    function ownerMintTo(address to, bytes32 hash) 
-        external 
-        onlyRole(MINTER_ROLE) 
-        returns (uint256) 
+
+    function mintNationalId(...)
+        external
+        onlyRole(MINTER_ROLE)
+        returns (uint256)
     {
         // ... minting logic
     }
+
+    function revokeToken(uint256 tokenId, string calldata reason)
+        external
+        onlyRole(ADMIN_ROLE)
+    {
+        // ... revocation logic
+    }
 }
 ```
 
-### 4. Revocation Mechanism
+### 2. Enhanced Revocation with Appeals
 
-Allow revoking compromised proofs:
+Add appeal mechanism for revoked tokens:
 
 ```solidity
-mapping(uint256 => bool) private _revoked;
-
-function revokeProof(uint256 tokenId) external onlyOwner {
-    _revoked[tokenId] = true;
-    emit ProofRevoked(tokenId, block.timestamp);
+enum RevocationStatus {
+    Active,
+    Revoked,
+    UnderAppeal,
+    Reinstated
 }
 
-function verifyProof(...) external view returns (bool) {
+mapping(uint256 => RevocationStatus) private _revocationStatus;
+mapping(uint256 => string) private _appealReason;
+
+function appealRevocation(uint256 tokenId, string calldata reason) external {
+    require(ownerOf(tokenId) == msg.sender, "Not token owner");
+    require(_revocationStatus[tokenId] == RevocationStatus.Revoked, "Not revoked");
+
+    _revocationStatus[tokenId] = RevocationStatus.UnderAppeal;
+    _appealReason[tokenId] = reason;
+
+    emit RevocationAppealed(tokenId, msg.sender, reason);
+}
+
+function resolveAppeal(uint256 tokenId, bool approve) external onlyOwner {
+    require(_revocationStatus[tokenId] == RevocationStatus.UnderAppeal, "Not under appeal");
+
+    _revocationStatus[tokenId] = approve ? RevocationStatus.Reinstated : RevocationStatus.Revoked;
+
+    emit AppealResolved(tokenId, approve);
+}
+```
+
+### 3. Time-Limited Verification
+
+Add expiration dates to documents:
+
+```solidity
+mapping(uint256 => uint256) private _tokenExpiry;
+
+function setTokenExpiry(uint256 tokenId, uint256 expiryTimestamp) external onlyOwner {
+    _tokenExpiry[tokenId] = expiryTimestamp;
+    emit TokenExpirySet(tokenId, expiryTimestamp);
+}
+
+function isTokenValid(uint256 tokenId) public view returns (bool) {
     if (_revoked[tokenId]) return false;
-    // ... existing logic
+    if (_tokenExpiry[tokenId] > 0 && block.timestamp > _tokenExpiry[tokenId]) {
+        return false;
+    }
+    return true;
 }
 ```
 
-### 5. Merkle Tree Batching
+### 4. Dynamic Transfer Fees
 
-For extremely large datasets, use Merkle trees:
+Allow updating transfer fees for LandTransferContract:
 
 ```solidity
-mapping(uint256 => bytes32) private _merkleRoots;
+function setTransferFee(uint256 newFeeBasisPoints) external onlyOwner {
+    require(newFeeBasisPoints <= 1000, "Fee too high"); // Max 10%
+    uint256 oldFee = transferFeeBasisPoints;
+    transferFeeBasisPoints = newFeeBasisPoints;
+    emit TransferFeeUpdated(oldFee, newFeeBasisPoints);
+}
+```
 
-function verifyProofWithMerkle(
-    uint256 tokenId,
-    bytes32 leaf,
-    bytes32[] calldata proof
-) external view returns (bool) {
-    bytes32 root = _merkleRoots[tokenId];
-    return MerkleProof.verify(proof, root, leaf);
+### 5. Emergency Pause Mechanism
+
+Add pausable functionality for emergencies:
+
+```solidity
+import "@openzeppelin/contracts/utils/Pausable.sol";
+
+contract NationalIdNFTPausable is NationalIdNFT, Pausable {
+    function mintNationalId(...) external override onlyOwner whenNotPaused {
+        // ... minting logic
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+}
+```
+
+### 6. On-Chain Verification Registry
+
+Create a separate contract to track verification status:
+
+```solidity
+contract VerificationRegistry {
+    mapping(uint256 => bool) public verified;
+    mapping(uint256 => address) public verifier;
+    mapping(uint256 => uint256) public verificationTimestamp;
+
+    function markAsVerified(uint256 tokenId, address verifierAddress) external {
+        require(msg.sender == nationalIdNFT || msg.sender == landOwnershipNFT);
+        verified[tokenId] = true;
+        verifier[tokenId] = verifierAddress;
+        verificationTimestamp[tokenId] = block.timestamp;
+    }
 }
 ```
 
@@ -372,43 +574,79 @@ function verifyProofWithMerkle(
 
 ### On-Chain Privacy
 
-**What's Public**:
-- All hashes are permanently visible
-- Wallet addresses associated with hashes
+**What's Public on Blockchain**:
+
+- Wallet addresses owning NFTs
+- Document types (e.g., "national_id", "land_ownership")
+- Document names (e.g., "John Doe National ID")
+- IPFS CIDs (point to encrypted files)
+- Ciphertext hashes (encrypted file hashes)
+- Encryption metadata (IV, auth tags - not the keys)
 - Minting timestamps
 - Transaction metadata
 
-**Privacy Risks**:
-1. **Linkability**: Observers can link multiple tokens to same user
+**What Remains Private**:
+
+- Actual file contents (encrypted on IPFS)
+- Encryption keys (never touch blockchain)
+- Decryption passwords
+- Raw document data
+
+### Privacy Risks
+
+1. **Wallet Linkability**: All NFTs tied to one wallet address are publicly linked
 2. **Timing Analysis**: Minting patterns may reveal user behavior
-3. **Hash Correlation**: If data becomes public, hash can be verified
+3. **Metadata Correlation**: Document names may reveal sensitive information
+4. **IPFS Content**: While encrypted, CIDs are public (can detect duplicates)
 
 ### Mitigation Strategies
 
-#### 1. Use Privacy-Preserving Layer 2
+#### 1. Minimal Document Names
 
-Deploy on privacy-focused L2s:
-- **Aztec Network**: ZK-rollup with built-in privacy
-- **Polygon Nightfall**: Privacy-focused Ethereum L2
-- **zkSync Era**: ZK-rollup with privacy features
+Use generic names instead of revealing ones:
 
-#### 2. Stealth Addresses
+```typescript
+// ❌ Don't do this:
+documentName: "John Doe National ID - Philippines";
 
-Mint tokens to stealth addresses:
-- User generates one-time address per proof
-- True owner revealed only when needed
-- Requires off-chain tracking of stealth addresses
+// ✅ Do this instead:
+documentName: "National ID Document";
+```
 
-#### 3. Homomorphic Encryption
+#### 2. Separate Wallets for Different Document Types
 
-Store encrypted hashes that can be verified without decryption.
+Recommend users use different wallets for different purposes:
 
-#### 4. Trusted Execution Environments (TEE)
+- One wallet for identity NFTs
+- Another for property NFTs
+- Prevents linking identity to property ownership
 
-Use TEEs for verification:
-- Intel SGX
-- ARM TrustZone
-- AWS Nitro Enclaves
+#### 3. Encrypted Filenames in Metadata
+
+Store encrypted filenames in metadata:
+
+```typescript
+const metadata = [
+  {
+    label: await encryptString("passport_photo.jpg", userKey),
+    value: ciphertextHash,
+    encrypted: true,
+  },
+];
+```
+
+#### 4. Privacy-Preserving Verification
+
+Verify ownership without revealing wallet address publicly:
+
+```typescript
+// Off-chain verification
+async function verifyOwnership(tokenId: number, proof: string) {
+  // User generates ZK proof of ownership
+  // Verifier checks proof without knowing wallet address
+  return await verifyZKProof(proof, tokenId);
+}
+```
 
 ---
 
@@ -417,11 +655,13 @@ Use TEEs for verification:
 ### Key Management
 
 1. **Hardware Security Modules (HSM)**
+
    - Store owner private key in HSM
    - Never expose key in plaintext
    - Use AWS CloudHSM, Azure Key Vault, or similar
 
 2. **Multi-Signature Wallets**
+
    - Use Gnosis Safe for owner role
    - Require multiple signers for minting
    - Implement time delays for minting operations
@@ -438,43 +678,57 @@ Use TEEs for verification:
 const monitor = {
   // Alert on unusual minting volume
   dailyMintLimit: 1000,
-  
+
   // Alert on minting to unknown addresses
   knownAddresses: new Set(),
-  
+
   // Alert on gas price anomalies
   maxGasPrice: parseGwei("100"),
-  
+
   checkMint: async (to: string, hash: string) => {
     // Validate address
     if (!monitor.knownAddresses.has(to)) {
       await sendAlert(`Unknown address: ${to}`);
     }
-    
+
     // Check daily limit
     const dailyCount = await getDailyMintCount();
     if (dailyCount > monitor.dailyMintLimit) {
       await sendAlert(`Daily limit exceeded: ${dailyCount}`);
     }
-  }
+  },
 };
 ```
 
 ### Incident Response
 
 **If Owner Key is Compromised**:
-1. Immediately pause minting operations
-2. Deploy new contract with new owner
-3. Migrate legitimate tokens if possible
-4. Notify users of contract migration
-5. Revoke compromised keys
 
-**If Hash Preimage is Leaked**:
-1. Assess impact (which users affected)
-2. Consider revoking affected tokens
-3. Implement stronger salting
-4. Notify affected users
-5. Re-mint with improved hashing
+1. Immediately pause minting operations (if pausable implemented)
+2. Revoke compromised tokens if necessary
+3. Deploy new contract with new owner key
+4. Update server configuration with new contract addresses
+5. Notify users of security incident
+6. Migrate legitimate tokens if feasible
+7. Review and strengthen key management procedures
+
+**If Encryption Keys are Compromised**:
+
+1. Assess impact (which files are affected)
+2. Notify affected users immediately
+3. Revoke affected NFTs
+4. Re-encrypt files with new keys
+5. Re-mint NFTs with new ciphertext hashes
+6. Update key management procedures
+7. Implement key rotation policy
+
+**If IPFS Content Becomes Unavailable**:
+
+1. Check pinning service status (Pinata/NFT.Storage)
+2. Re-pin content on backup IPFS nodes
+3. Verify CIDs match on-chain records
+4. Consider migration to Arweave for permanent storage
+5. Notify users if prolonged downtime expected
 
 ---
 
@@ -482,18 +736,73 @@ const monitor = {
 
 Before production deployment:
 
-- [ ] Implement data salting with secure random salt
-- [ ] Store salt in secure environment variable
+### Security
+
+- [ ] Implement file encryption (AES-256-GCM) for all documents
+- [ ] Store encryption keys securely (never on blockchain)
 - [ ] Use HSM or multi-sig for owner key
 - [ ] Set up event monitoring and alerts
 - [ ] Audit contract code (consider external audit)
+- [ ] Test transfer restrictions (soul-bound for NationalIdNFT)
+- [ ] Test authorized transfer mechanism (LandOwnershipNFT)
+- [ ] Verify one-NFT-per-wallet enforcement (NationalIdNFT)
+
+### Infrastructure
+
+- [ ] Pin IPFS files on multiple nodes (Pinata/NFT.Storage)
+- [ ] Set up backup IPFS pinning service
+- [ ] Configure server with proper environment variables
 - [ ] Test with production-like data volumes
+- [ ] Implement rate limiting on minting API
+- [ ] Set up monitoring dashboards (Grafana/Datadog)
+
+### Operations
+
 - [ ] Document backup and recovery procedures
 - [ ] Plan for key rotation
-- [ ] Implement rate limiting on minting
 - [ ] Test incident response procedures
+- [ ] Set up 24/7 monitoring for critical events
+- [ ] Configure alert thresholds
+- [ ] Create runbooks for common issues
+
+### Compliance
+
 - [ ] Review and update privacy policy
-- [ ] Ensure compliance with data protection laws (GDPR, CCPA, etc.)
+- [ ] Ensure compliance with data protection laws (GDPR, CCPA)
+- [ ] Document data retention policies
+- [ ] Get legal review of smart contracts
+- [ ] Prepare user consent mechanisms
+- [ ] Document right-to-erasure limitations (blockchain immutability)
+
+### Testing
+
+- [ ] Test on testnet (Base Sepolia) thoroughly
+- [ ] Perform load testing (batch minting)
+- [ ] Test revocation mechanism
+- [ ] Test land transfer contract integration
+- [ ] Verify gas costs are acceptable
+- [ ] Test edge cases (empty metadata, special characters)
+
+---
+
+## Contract Addresses (Base Sepolia Testnet)
+
+After deployment, update these addresses:
+
+```bash
+# To be filled after deployment
+NATIONAL_ID_NFT_ADDRESS=0x...
+LAND_OWNERSHIP_NFT_ADDRESS=0x...
+LAND_TRANSFER_CONTRACT_ADDRESS=0x...
+```
+
+Verify contracts on Basescan:
+
+```bash
+npx hardhat verify --network baseSepolia NATIONAL_ID_NFT_ADDRESS
+npx hardhat verify --network baseSepolia LAND_OWNERSHIP_NFT_ADDRESS
+npx hardhat verify --network baseSepolia LAND_TRANSFER_CONTRACT_ADDRESS "LAND_OWNERSHIP_ADDRESS" 250 "FEE_RECIPIENT"
+```
 
 ---
 
@@ -502,43 +811,103 @@ Before production deployment:
 ### Security Tests
 
 ```typescript
-describe("Security Tests", () => {
-  it("Should prevent duplicate hash minting", async () => {
-    const hash = keccak256(toBytes("data"));
-    await proofNFT.ownerMintTo(user1, hash);
-    await expect(proofNFT.ownerMintTo(user2, hash)).to.be.rejected;
+describe("NationalIdNFT Security Tests", () => {
+  it("Should prevent transfers", async () => {
+    await nationalIdNFT.write.mintNationalId([...]);
+    const tokenId = 1n;
+
+    await expect(
+      nationalIdNFT.write.transferFrom([owner, user2, tokenId])
+    ).to.be.rejectedWith("TransferNotAllowed");
   });
-  
-  it("Should prevent zero hash minting", async () => {
-    await expect(proofNFT.ownerMintTo(user1, ZERO_HASH)).to.be.rejected;
+
+  it("Should prevent duplicate National ID for same wallet", async () => {
+    await nationalIdNFT.write.mintNationalId([user1, ...]);
+
+    await expect(
+      nationalIdNFT.write.mintNationalId([user1, ...])
+    ).to.be.rejectedWith("WalletAlreadyHasNationalId");
   });
-  
+
   it("Should prevent non-owner minting", async () => {
     await expect(
-      proofNFT.connect(user1).ownerMintTo(user2, hash)
+      nationalIdNFT.write.mintNationalId([user1, ...], { account: user2 })
     ).to.be.rejected;
   });
-  
-  it("Should verify proof only for correct owner", async () => {
-    await proofNFT.ownerMintTo(user1, hash);
-    expect(await proofNFT.verifyProof(user1, 1, data)).to.be.true;
-    expect(await proofNFT.verifyProof(user2, 1, data)).to.be.false;
+
+  it("Should verify token belongs to correct owner", async () => {
+    await nationalIdNFT.write.mintNationalId([user1, ...]);
+    const tokenId = await nationalIdNFT.read.getTokenIdByWallet([user1]);
+
+    expect(await nationalIdNFT.read.ownerOf([tokenId])).to.equal(user1);
+  });
+});
+
+describe("LandOwnershipNFT Security Tests", () => {
+  it("Should prevent direct transfers", async () => {
+    await landOwnershipNFT.write.mintLandOwnership([user1, ...]);
+    const tokenId = 1n;
+
+    await expect(
+      landOwnershipNFT.write.transferFrom([user1, user2, tokenId], { account: user1 })
+    ).to.be.rejectedWith("DirectTransferNotAllowed");
+  });
+
+  it("Should allow multiple land NFTs per wallet", async () => {
+    await landOwnershipNFT.write.mintLandOwnership([user1, ...]);
+    await landOwnershipNFT.write.mintLandOwnership([user1, ...]);
+
+    const balance = await landOwnershipNFT.read.balanceOf([user1]);
+    expect(balance).to.equal(2n);
+  });
+
+  it("Should allow revocation by owner", async () => {
+    await landOwnershipNFT.write.mintLandOwnership([user1, ...]);
+    const tokenId = 1n;
+
+    await landOwnershipNFT.write.revokeToken([tokenId, "Fraud detected"]);
+
+    const metadata = await landOwnershipNFT.read.getMetadata([tokenId]);
+    expect(metadata.revoked).to.be.true;
+    expect(metadata.revocationReason).to.equal("Fraud detected");
+  });
+
+  it("Should only allow authorized contract to transfer", async () => {
+    await landOwnershipNFT.write.setTransferContract([transferContract.address]);
+
+    // Authorized contract can transfer
+    await expect(
+      transferContract.write.initiateTransfer([tokenId, user2, price])
+    ).to.not.be.rejected;
+
+    // Direct transfer still blocked
+    await expect(
+      landOwnershipNFT.write.transferFrom([user1, user2, tokenId], { account: user1 })
+    ).to.be.rejectedWith("DirectTransferNotAllowed");
   });
 });
 ```
 
-### Fuzzing Tests
+### Gas Optimization Tests
 
-Use Echidna or Foundry fuzzing:
-```solidity
-// Foundry invariant test
-function invariant_totalSupplyMatchesCounter() public {
-    assertEq(proofNFT.totalSupply(), expectedSupply);
-}
+```typescript
+describe("Gas Optimization", () => {
+  it("Batch minting should be cheaper than individual mints", async () => {
+    const recipients = [user1, user2, user3];
+    const count = recipients.length;
 
-function invariant_noHashCollisions() public {
-    // Verify uniqueness constraint holds
-}
+    // Measure batch mint gas
+    const batchTx = await landOwnershipNFT.write.batchMintLandOwnership([...]);
+    const batchReceipt = await publicClient.waitForTransactionReceipt({ hash: batchTx });
+    const batchGas = batchReceipt.gasUsed;
+
+    console.log(`Batch mint (${count} NFTs): ${batchGas} gas`);
+    console.log(`Average per NFT: ${batchGas / BigInt(count)} gas`);
+
+    // Batch should be more efficient
+    expect(batchGas / BigInt(count)).to.be.lessThan(expectedSingleMintGas);
+  });
+});
 ```
 
 ---
@@ -563,22 +932,29 @@ function invariant_noHashCollisions() public {
 
 ## References
 
-- [OpenZeppelin Security Best Practices](https://docs.openzeppelin.com/contracts/4.x/api/security)
+- [OpenZeppelin Security Best Practices](https://docs.openzeppelin.com/contracts/5.x/)
+- [OpenZeppelin ERC-721 Documentation](https://docs.openzeppelin.com/contracts/5.x/erc721)
 - [Ethereum Smart Contract Security Best Practices](https://consensys.github.io/smart-contract-best-practices/)
 - [NIST Cryptographic Standards](https://csrc.nist.gov/publications)
-- [Zero Knowledge Proofs: An Introduction](https://z.cash/technology/zksnarks/)
+- [IPFS Best Practices](https://docs.ipfs.tech/concepts/best-practices/)
+- [Viem Documentation](https://viem.sh/)
+- [Base Network Documentation](https://docs.base.org/)
 
 ---
 
 ## Contact and Support
 
 For security issues or questions:
+
 - Review code carefully before deployment
-- Consider professional security audit
-- Test thoroughly on testnet
-- Monitor production contract continuously
+- Consider professional security audit for production
+- Test thoroughly on Base Sepolia testnet
+- Monitor production contracts continuously
+- Report security vulnerabilities responsibly
 
 ---
 
-**Last Updated**: October 2024  
-**Version**: 1.0.0
+**Last Updated**: October 2025  
+**Version**: 2.0.0  
+**Contracts**: NationalIdNFT, LandOwnershipNFT, LandTransferContract  
+**Network**: Base Sepolia (Testnet) / Base (Mainnet)
