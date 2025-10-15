@@ -18,7 +18,7 @@ import { baseSepolia } from "viem/chains";
 import path from "path";
 import fs from "fs";
 
-// Contract ABIs (will be copied from blockchain/artifacts after deployment)
+// Contract ABIs (loaded from deployed contracts)
 let NationalIdNFTABI: any[] = [];
 let LandOwnershipNFTABI: any[] = [];
 
@@ -37,12 +37,13 @@ try {
   LandOwnershipNFTABI = landOwnershipData.abi;
 
   console.log("✅ Contract ABIs loaded successfully");
+  console.log(`   National ID NFT ABI: ${NationalIdNFTABI.length} functions`);
+  console.log(
+    `   Land Ownership NFT ABI: ${LandOwnershipNFTABI.length} functions`
+  );
 } catch (error) {
   console.warn(
-    "⚠️  Contract ABIs not found. Copy them from blockchain/artifacts after deployment."
-  );
-  console.warn(
-    "   Run: cp blockchain/artifacts/contracts/*/**.json server/src/abis/"
+    "⚠️  Contract ABIs not found. Make sure they're copied to server/src/abis/"
   );
 }
 
@@ -50,22 +51,27 @@ try {
 const BLOCKCHAIN_RPC_URL =
   process.env.BLOCKCHAIN_RPC_URL || "https://sepolia.base.org";
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
-const NATIONAL_ID_NFT_ADDRESS = process.env.NATIONAL_ID_NFT_ADDRESS;
-const LAND_OWNERSHIP_NFT_ADDRESS = process.env.LAND_OWNERSHIP_NFT_ADDRESS;
+
+// Contract addresses - deployed on Base Sepolia (October 15, 2025)
+const NATIONAL_ID_NFT_ADDRESS = (process.env.NATIONAL_ID_NFT_ADDRESS ||
+  "0xbe5fb46274763165a8e9bda180273b75d817fec0") as Address;
+
+const LAND_OWNERSHIP_NFT_ADDRESS = (process.env.LAND_OWNERSHIP_NFT_ADDRESS ||
+  "0xdfaf754cc95a9060bd6e467a652f9642e9e33c26") as Address;
 
 // Initialize clients
 let walletClient: any = null;
 let publicClient: any = null;
 let account: any = null;
 
-if (
-  ADMIN_PRIVATE_KEY &&
-  NATIONAL_ID_NFT_ADDRESS &&
-  LAND_OWNERSHIP_NFT_ADDRESS
-) {
+if (ADMIN_PRIVATE_KEY) {
   try {
     // Create account from private key
-    account = privateKeyToAccount(ADMIN_PRIVATE_KEY as `0x${string}`);
+    const privateKey = ADMIN_PRIVATE_KEY.startsWith("0x")
+      ? ADMIN_PRIVATE_KEY
+      : `0x${ADMIN_PRIVATE_KEY}`;
+
+    account = privateKeyToAccount(privateKey as `0x${string}`);
 
     // Create wallet client for transactions
     walletClient = createWalletClient({
@@ -89,11 +95,9 @@ if (
     console.error("❌ Failed to initialize blockchain clients:", error);
   }
 } else {
-  console.warn("⚠️  Missing environment variables for NFT contracts");
-  console.warn(
-    "   Required: ADMIN_PRIVATE_KEY, NATIONAL_ID_NFT_ADDRESS, LAND_OWNERSHIP_NFT_ADDRESS"
-  );
-  console.warn("   Add them to server/.env file");
+  console.warn("⚠️  ADMIN_PRIVATE_KEY not set in environment");
+  console.warn("   Server will not be able to mint NFTs");
+  console.warn("   Add ADMIN_PRIVATE_KEY to server/.env file");
 }
 
 export interface DocMeta {
@@ -120,17 +124,20 @@ export interface MintResult {
 
 /**
  * Mint NFT based on request type
+ *
+ * Updated to use safeMint(address to, string uri) signature
+ * The contract expects a tokenURI string, not DocMeta array
  */
 export async function mintNFT(request: MintRequest): Promise<MintResult> {
   if (!walletClient || !publicClient) {
     throw new Error(
-      "Blockchain clients not initialized. Check environment variables."
+      "Blockchain clients not initialized. Check ADMIN_PRIVATE_KEY in environment."
     );
   }
 
   if (NationalIdNFTABI.length === 0 || LandOwnershipNFTABI.length === 0) {
     throw new Error(
-      "Contract ABIs not loaded. Copy them from blockchain/artifacts/."
+      "Contract ABIs not loaded. Check that ABI files exist in server/src/abis/"
     );
   }
 
@@ -151,21 +158,22 @@ export async function mintNFT(request: MintRequest): Promise<MintResult> {
   console.log(`   Metadata items: ${documents.length}`);
 
   try {
-    // Prepare metadata in correct format for contract
-    const metadata = documents.map((doc) => ({
-      label: doc.label,
-      value: doc.value,
-      encrypted: doc.encrypted,
-    }));
+    // Note: The current contract uses safeMint(address to, string uri)
+    // If you need to store metadata on-chain, you'll need to upload to IPFS first
+    // and pass the IPFS URI here
 
-    // Call safeMint on the contract
+    // For now, we'll use a placeholder. You should:
+    // 1. Upload metadata to IPFS
+    // 2. Pass the IPFS URI (e.g., "ipfs://Qm...")
+    const tokenURI = `ipfs://placeholder-${Date.now()}`; // Replace with actual IPFS upload
+
     console.log("   Sending transaction...");
 
     const hash = await walletClient.writeContract({
       address: contractAddress,
       abi,
       functionName: "safeMint",
-      args: [getAddress(requesterWallet), metadata],
+      args: [getAddress(requesterWallet), tokenURI], // Changed from metadata array to tokenURI
     });
 
     console.log(`   Transaction sent: ${hash}`);
