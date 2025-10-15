@@ -128,7 +128,7 @@ export default function DashboardHome() {
 
   const statsCards = [
     {
-      title: "Total Verifications",
+      title: "NFT Documents",
       value: stats.total,
       icon: FileCheck,
       color: "",
@@ -398,10 +398,10 @@ export default function DashboardHome() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground">
-                    My Documents
+                    My NFT Documents
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    View all requests
+                    View all minted NFT documents
                   </p>
                 </div>
               </div>

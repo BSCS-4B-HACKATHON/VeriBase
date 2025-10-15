@@ -8,6 +8,7 @@ async function main() {
   console.log();
 
   // Get the deployer account
+  const publicClient = await hre.viem.getPublicClient();
   const [deployer] = await hre.viem.getWalletClients();
   console.log("📋 Deployment Details:");
   console.log(`   Deployer: ${deployer.account.address}`);

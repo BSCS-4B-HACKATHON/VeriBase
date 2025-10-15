@@ -1,0 +1,9 @@
+{
+  "nationalIdNFT": "0xbe5fb46274763165a8e9bda180273b75d817fec0",
+  "landOwnershipNFT": "0xdfaf754cc95a9060bd6e467a652f9642e9e33c26",
+  "landTransferContract": "0xecc7d23c7d82bbaf59cd0b40329d24fd42617467",
+  "deployer": "0xA5B26137cdBD2228A4937425ff58ADb25E848a87",
+  "network": "baseSepolia",
+  "chainId": 84532,
+  "deployedAt": "2025-10-15T13:04:45.556Z"
+}

@@ -1,6 +1,18 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useWallet } from "@/hooks/useWallet";
+import ConnectWallet from "@/components/connect-wallet";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import Image from "next/image";
+import MetamaskIcon from "@/public/metamask-logo.png";
+import CoinBaseIcon from "@/public/cbw.svg";
+import { useConnect } from "wagmi";
 import {
   Wallet,
   ChevronDown,
@@ -15,8 +27,51 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
+import { useCallback } from "react";
+
+function ConnectDropdown() {
+  const { connect, connectors } = useConnect();
+
+  const handleClick = useCallback(
+    (id: string) => {
+      const c = connectors.find((x) => x.id === id);
+      if (c) connect({ connector: c });
+    },
+    [connect, connectors]
+  );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="bg-white/0 hover:bg-white/5 flex items-center justify-center px-4 sm:px-6 w-full rounded-lg shadow-lg font-mono text-xs sm:text-sm md:text-base font-semibold tracking-wider text-white h-[50px] sm:h-[60px] border border-white/10 cursor-pointer">
+          CONNECT WALLET
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent className="w-48 bg-[#081014] border border-white/10 rounded-md p-2">
+        <DropdownMenuItem
+          onClick={() => handleClick("metaMaskSDK")}
+          className="flex items-center gap-2 px-2 py-2 hover:bg-white/5 rounded-md cursor-pointer"
+        >
+          <Image src={MetamaskIcon} alt="MetaMask" width={20} height={20} />
+          <span>MetaMask</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={() => handleClick("coinbaseWalletSDK")}
+          className="flex items-center gap-2 px-2 py-2 hover:bg-white/5 rounded-md cursor-pointer"
+        >
+          <Image src={CoinBaseIcon} alt="Coinbase" width={20} height={20} />
+          <span>Coinbase Wallet</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export default function Hero() {
+  const { address } = useWallet();
+
   return (
     <section className="relative rounded-2xl mt-2 mb-6 md:min-h-[calc(100vh-144px)] overflow-hidden">
       {/* Enhanced animated grid pattern background */}
@@ -58,9 +113,16 @@ export default function Hero() {
 
           <div>
             <div className="flex flex-col gap-3 sm:gap-4 mb-4">
-              <Button className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 sm:px-6 w-full rounded-lg shadow-lg font-mono text-xs sm:text-sm md:text-base font-semibold tracking-wider text-black h-[50px] sm:h-[60px]">
-                <Wallet className="mr-2 h-4 w-4" /> CONNECT WALLET
-              </Button>
+              {!address ? (
+                <ConnectDropdown />
+              ) : (
+                <Link
+                  href="/home"
+                  className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 sm:px-6 w-full rounded-lg shadow-lg font-mono text-xs sm:text-sm md:text-base font-semibold tracking-wider text-black h-[50px] sm:h-[60px]"
+                >
+                  <Wallet className="mr-2 h-4 w-4" /> DASHBOARD
+                </Link>
+              )}
               <Link
                 href="https://x.com/jackjack_eth"
                 target="_blank"
@@ -193,9 +255,18 @@ export default function Hero() {
             Securely and transparently with blockchain-backed trust.
           </p>
           <div className="flex flex-row justify-center gap-3 md:gap-4 mb-8">
-            <Button className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 md:px-6 lg:px-8 rounded-lg shadow-lg font-mono text-sm md:text-base font-semibold tracking-wider text-black h-[50px] md:h-[60px] min-w-[180px] md:min-w-[220px]">
-              <Wallet className="mr-2 h-4 w-4" /> CONNECT WALLET
-            </Button>
+            {!address ? (
+              <div className="flex items-center justify-center min-w-[180px] md:min-w-[220px]">
+                <ConnectDropdown />
+              </div>
+            ) : (
+              <Link
+                href="/home"
+                className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 md:px-6 lg:px-8 rounded-lg shadow-lg font-mono text-sm md:text-base font-semibold tracking-wider text-black h-[50px] md:h-[60px] min-w-[180px] md:min-w-[220px]"
+              >
+                <Wallet className="mr-2 h-4 w-4" /> DASHBOARD
+              </Link>
+            )}
             <Link
               href="https://x.com/jackjack_eth"
               target="_blank"
