@@ -53,7 +53,7 @@ function MyComponent() {
 
 ### Write to Contract (Costs Gas)
 
-```typescript
+````typescript
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import LandOwnershipNFT from "@/src/abis/LandOwnershipNFT.json";
 
@@ -70,41 +70,10 @@ function ListLandForSale() {
     });
   };
 
-  return (
-    <button onClick={handleListForSale} disabled={isLoading}>
-      {isLoading ? "Listing..." : "List for Sale"}
-    </button>
-  );
-}
-```
+  This file has been archived and consolidated into the main `README.md` at the repository root.
+  Please see `README.md` for contract usage, ABI locations and quick Wagmi examples.
 
----
-
-## 📋 Available Contract Functions
-
-### NationalIdNFT (`0xbe5f...fec0`)
-
-**Read Functions:**
-
-- `balanceOf(address)` - Get number of IDs owned
-- `ownerOf(tokenId)` - Get owner of specific ID
-- `tokenURI(tokenId)` - Get metadata URI
-- `name()` - Get contract name
-- `symbol()` - Get contract symbol
-
-**Write Functions (Admin Only):**
-
-- `safeMint(address to, string uri)` - Mint new ID
-- `burn(tokenId)` - Burn an ID
-
----
-
-### LandOwnershipNFT (`0xdfaf...3c26`)
-
-**Read Functions:**
-
-- `balanceOf(address)` - Get number of land parcels owned
-- `ownerOf(tokenId)` - Get owner of land parcel
+  If you need a specific example restored into this file, tell me which section and I'll add it back.
 - `tokenURI(tokenId)` - Get land metadata
 - `isForSale(tokenId)` - Check if land is listed for sale
 - `salePrice(tokenId)` - Get sale price if listed
@@ -185,7 +154,7 @@ function PurchaseLand({ tokenId }: { tokenId: bigint }) {
     </div>
   );
 }
-```
+````
 
 ---
 

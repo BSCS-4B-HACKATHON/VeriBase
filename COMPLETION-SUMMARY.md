@@ -23,112 +23,46 @@ I've completely revised your smart contract system from the original `ProofNFT` 
 
 **Deployment:** Ready to deploy
 
-### 2. LandOwnershipNFT.sol ✅
-
-**Purpose:** Property ownership with controlled transfers
-
-**Key Features:**
-
-- ✅ Multiple NFTs per wallet
-- ✅ Only transferable via authorized contract
-- ✅ Stores DocMeta[] with encrypted fields
-- ✅ Perfect match to your `requestType: 'land_ownership'` schema
-
 **Deployment:** Ready to deploy
 
 ### 3. LandTransferContract.sol ✅
 
 **Purpose:** Escrow and regulated land transfers
-
 **Key Features:**
 
-- ✅ Transfer initiation with price and duration
-- ✅ Escrow deposit management
-- ✅ Admin-approved transfer completion
-- ✅ 2.5% fee collection
-- ✅ Multi-party cancellation
 - ✅ Automatic refunds
-- ✅ Legal document linking (IPFS)
 
-**Deployment:** Ready to deploy
+  - Complete system overview
+  - Documentation index
 
----
-
-## 📝 Documentation Created
-
-### Core Documents
-
-1. **START-HERE.md** (Updated)
-
-   - Complete system overview
-   - Quick start guide
-   - Documentation index
-   - Example code snippets
-
-2. **QUICK-REFERENCE.md** (New)
-
-   - One-page quick reference card
-   - All key commands
-   - Contract functions summary
-   - Troubleshooting guide
-
-3. **NEXT-STEPS.md** (New)
-
-   - Phase-by-phase deployment guide
-   - Backend integration steps
-   - Frontend integration steps
-   - Testing procedures
-
-4. **SMART-CONTRACT-ARCHITECTURE.md** (New)
-   - Full system architecture
-   - Contract relationships
-   - Data flow diagrams
-   - Integration points
-
-### Blockchain Documentation
+  - Frontend integration steps
+  - Full system architecture
+  - Data flow diagrams
 
 5. **blockchain/README.md** (Updated)
 
    - Project overview
-   - Quick start commands
    - Contract summaries
-   - Network configuration
 
 6. **blockchain/NFT-CONTRACTS-README.md** (New)
 
    - Complete contract documentation
-   - Function references
    - Usage examples
-   - Best practices
 
 7. **blockchain/LAND-TRANSFER-CONTRACT.md** (New)
 
    - Transfer contract deep dive
-   - Flow diagrams
    - Fee structure
-   - Security features
-
-8. **blockchain/CONTRACT-REVISION-SUMMARY.md** (New)
-
-   - Migration from ProofNFT
    - Backend integration guide
-   - Environment setup
 
-9. **blockchain/DEPLOYMENT-CHECKLIST.md** (New)
    - Step-by-step deployment
    - Verification steps
    - Post-deployment tasks
 
-### Client Documentation
+   - Wagmi v2 migration details
+   - Wallet connection fixes
 
-10. **client/WAGMI-MIGRATION.md** (Existing)
-
-    - Wagmi v2 migration details
-    - Wallet connection fixes
-
-11. **client/WAGMI-QUICKSTART.md** (Existing)
-    - Quick reference for Wagmi
-    - Common patterns
+   - Quick reference for Wagmi
 
 ---
 
@@ -139,72 +73,26 @@ I've completely revised your smart contract system from the original `ProofNFT` 
 ```
 ✅ blockchain/contracts/NationalIdNFT.sol (NEW)
 ✅ blockchain/contracts/LandOwnershipNFT.sol (NEW)
-✅ blockchain/contracts/LandTransferContract.sol (NEW)
 ```
 
-### Deployment Infrastructure
-
-```
 ✅ blockchain/scripts/deployNFTs.ts (NEW - unified deployment)
-✅ blockchain/ignition/modules/NationalIdNFT.ts (NEW)
 ✅ blockchain/ignition/modules/LandOwnershipNFT.ts (NEW)
-✅ blockchain/ignition/modules/LandTransferContract.ts (NEW)
-```
-
-### Documentation Files
 
 ```
-✅ START-HERE.md (UPDATED)
-✅ QUICK-REFERENCE.md (NEW)
-✅ NEXT-STEPS.md (NEW)
-✅ SMART-CONTRACT-ARCHITECTURE.md (NEW)
+
+
 ✅ blockchain/README.md (UPDATED)
-✅ blockchain/NFT-CONTRACTS-README.md (NEW)
 ✅ blockchain/LAND-TRANSFER-CONTRACT.md (NEW)
-✅ blockchain/CONTRACT-REVISION-SUMMARY.md (NEW)
 ✅ blockchain/DEPLOYMENT-CHECKLIST.md (NEW)
-```
-
-### Cleanup
-
-```
 ✅ blockchain/contracts/ProofNFT.sol (DELETED)
-✅ blockchain/test/ProofNFT.ts (DELETED)
 ✅ blockchain/scripts/deployProofNFT.ts (DELETED)
-✅ blockchain/README-PROOFNFT.md (DELETED)
-```
 
----
 
-## 🎯 What Matches Your Schema
-
-### Database Schema Alignment
-
-Your MongoDB schema:
-
-```typescript
-interface DocMeta {
-  label: string; // ✅ Maps to contract DocMeta.label
-  value: string; // ✅ Maps to contract DocMeta.value
-  encrypted: boolean; // ✅ Maps to contract DocMeta.encrypted
-}
-
-interface Request {
-  requestId: string; // Not stored on-chain
   requesterWallet: string; // ✅ Used for minting recipient
-  requestType: string; // ✅ Determines which NFT to mint
   documents: DocMeta[]; // ✅ Maps to token metadata array
-  status: string; // Not stored on-chain
-  // ... other fields
-}
-```
 
-### Contract Mapping
-
-**National ID Requests (`requestType: 'national_id'`):**
-
-```solidity
-// Mint NationalIdNFT
+This file has been archived. The complete project overview and documentation have been consolidated into `README.md` at the repository root.
+Please open `README.md` for the current project summary, deploy addresses, and next steps.
 function safeMint(address to, DocMeta[] memory metadata)
     → One NFT per wallet
     → Stores all DocMeta[]
