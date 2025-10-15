@@ -83,7 +83,6 @@ export default function NewRequestPage() {
   // National ID form state
   const [nationalIdForm, setNationalIdForm] = useState({
     firstName: "",
-    middleName: "",
     lastName: "",
     idNumber: "",
     issueDate: "",
@@ -96,7 +95,6 @@ export default function NewRequestPage() {
   // Land Title form state
   const [landTitleForm, setLandTitleForm] = useState({
     firstName: "",
-    middleName: "",
     lastName: "",
     latitude: "",
     longitude: "",
@@ -151,14 +149,16 @@ export default function NewRequestPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    if (!address) {
+    // prefer the wallet address from the wallet hook (more up-to-date than local storage)
+    const submitAddress = walletAddress ?? address;
+    if (!submitAddress) {
       toast.error("Wallet not connected");
       setIsSubmitting(false);
       return;
     }
 
     await submitNationalId(nationalIdForm, {
-      address,
+      address: submitAddress,
       walletClient,
       BE_URL,
       setIsSubmitting,
@@ -170,15 +170,15 @@ export default function NewRequestPage() {
   const handleSubmitLandTitle = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    if (!address) {
+    const submitAddress = walletAddress ?? address;
+    if (!submitAddress) {
       toast.error("Wallet not connected");
       setIsSubmitting(false);
       return;
     }
 
     await submitLandTitle(landTitleForm, {
-      address,
+      address: submitAddress,
       walletClient,
       BE_URL,
       setIsSubmitting,
@@ -254,26 +254,7 @@ export default function NewRequestPage() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="middleName">
-                        Middle Name{" "}
-                        <span className="text-muted-foreground text-xs">
-                          (optional)
-                        </span>
-                      </Label>
-                      <Input
-                        id="middleName"
-                        placeholder="Enter your middle name"
-                        value={nationalIdForm.middleName}
-                        onChange={(e) =>
-                          setNationalIdForm((prev) => ({
-                            ...prev,
-                            middleName: e.target.value,
-                          }))
-                        }
-                        className="bg-surface-200"
-                      />
-                    </div>
+                    {/* Middle name removed per request */}
 
                     <div className="space-y-2">
                       <Label htmlFor="lastName">
@@ -461,26 +442,7 @@ export default function NewRequestPage() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="landMiddleName">
-                        Middle Name{" "}
-                        <span className="text-muted-foreground text-xs">
-                          (optional)
-                        </span>
-                      </Label>
-                      <Input
-                        id="landMiddleName"
-                        placeholder="Enter your middle name"
-                        value={landTitleForm.middleName}
-                        onChange={(e) =>
-                          setLandTitleForm((prev) => ({
-                            ...prev,
-                            middleName: e.target.value,
-                          }))
-                        }
-                        className="bg-surface-200"
-                      />
-                    </div>
+                    {/* Middle name removed per request */}
 
                     <div className="space-y-2">
                       <Label htmlFor="landLastName">

@@ -106,23 +106,39 @@ export async function CreateRequestHandler(req: Request, res: Response) {
 export async function GetRequestsHandler(req: Request, res: Response) {
   try {
     const { requesterWallet, requestType, status } = req.query;
-    const filter = {};
-    if (requesterWallet) {
-      Object.assign(filter, {
-        requesterWallet: String(requesterWallet).toLowerCase(),
-      });
+
+    if (!requesterWallet) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing requesterWallet parameter" });
     }
+
     if (requestType) {
-      Object.assign(filter, {
-        requestType: String(requestType).toLowerCase(),
-      });
+      // validate requestType if provided
+      const rt = String(requestType).toLowerCase();
+      if (rt !== "national_id" && rt !== "land_ownership") {
+        return res
+          .status(400)
+          .json({ ok: false, error: "invalid requestType parameter" });
+      }
     }
     if (status) {
-      Object.assign(filter, {
-        status: String(status).toLowerCase(),
-      });
+      // validate status if provided
+      const validStatuses = ["pending", "verified", "rejected"];
+      const st = String(status).toLowerCase();
+      if (!validStatuses.includes(st)) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "invalid status parameter" });
+      }
     }
-    const docs = await RequestModel.find(filter).sort({ createdAt: -1 });
+
+    const docs = await RequestModel.find({
+      requesterWallet: String(requesterWallet),
+      ...(requestType ? { requestType: String(requestType) } : {}),
+      ...(status ? { status: String(status) } : {}),
+    }).sort({ createdAt: -1 });
+    console.log(`Fetched ${docs.length} requests from DB`);
     return res.status(200).json({ ok: true, requests: docs });
   } catch (err) {
     console.error("GetRequestsHandler error:", err);
@@ -139,29 +155,26 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
         .json({ ok: false, error: "missing requestId parameter" });
     }
 
-    // fetch request record from DB
-    const recordDoc = await RequestModel.findOne({ requestId: requestId });
+    // fetch request record from DB using `lean()` for a faster plain object
+    const recordDoc = await RequestModel.findOne({
+      requestId: requestId,
+    }).lean();
     if (!recordDoc) {
       return res.status(404).json({ ok: false, error: "request not found" });
     }
 
-    // if requesterWallet is provided, ensure it matches the record
+    // if requesterWallet is provided, ensure it matches the record (compare lowercased once)
     if (requesterWallet) {
-      if (
-        String(recordDoc.requesterWallet).toLowerCase() !==
-        String(requesterWallet).toLowerCase()
-      ) {
+      const recordWallet = String(recordDoc.requesterWallet).toLowerCase();
+      if (recordWallet !== String(requesterWallet).toLowerCase()) {
         return res.status(403).json({ ok: false, error: "access denied" });
       }
     }
 
-    // normalize output object
-    const output: any =
-      typeof recordDoc.toObject === "function"
-        ? recordDoc.toObject()
-        : JSON.parse(JSON.stringify(recordDoc));
+    // recordDoc is already a plain object due to lean()
+    const output: any = recordDoc;
 
-    // fetch metadata blob if present
+    // fetch metadata blob if present (only when needed)
     let metadata: any = null;
     if (output.metadataCid) {
       try {
@@ -184,30 +197,34 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
       }
     }
 
-    // Decrypt scalar encrypted fields if we have AES key
+    // Decrypt scalar encrypted fields in parallel if we have AES key
     if (
       rawAesKey &&
       metadata?.encryptedFields &&
       typeof metadata.encryptedFields === "object"
     ) {
-      output.decryptedFields = {};
-      for (const [k, v] of Object.entries(metadata.encryptedFields)) {
+      const entries = Object.entries(metadata.encryptedFields);
+      // run all decrypts concurrently with Promise.all and build an object
+      const decryptPromises = entries.map(async ([k, v]) => {
         try {
-          // v can be an object { ciphertextBase64, iv } or a string (base64 ct with tag)
           if (typeof v === "string") {
-            // try decrypting string form (assume ciphertext+tag base64 with iv stored elsewhere)
-            output.decryptedFields[k] = await decryptField(rawAesKey, {
+            const dec = await decryptField(rawAesKey, {
               ciphertextBase64: v,
               iv: metadata.iv ?? "",
             } as any);
+            return [k, dec] as [string, any];
           } else {
-            output.decryptedFields[k] = await decryptField(rawAesKey, v as any);
+            const dec = await decryptField(rawAesKey, v as any);
+            return [k, dec] as [string, any];
           }
         } catch (err) {
           console.warn(`failed to decrypt field ${k} for ${requestId}`, err);
-          output.decryptedFields[k] = null;
+          return [k, null] as [string, any];
         }
-      }
+      });
+
+      const decryptedPairs = await Promise.all(decryptPromises);
+      output.decryptedFields = Object.fromEntries(decryptedPairs);
     } else if (metadata?.encryptedFields) {
       // expose encrypted fields so client (uploader) can attempt client-side decryption if it has the key
       output.encryptedFields = metadata.encryptedFields;
@@ -253,22 +270,26 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
     const dbFiles = Array.isArray(output.files) ? output.files : [];
     const metaFiles = Array.isArray(metadata?.files) ? metadata.files : [];
 
-    // if DB didn't store files, use metadata files
+    // Build a map for metadata files keyed by CID for O(1) lookup
+    const metaByCid = new Map<string, any>();
+    for (const mf of metaFiles) {
+      if (mf && mf.cid) metaByCid.set(String(mf.cid), mf);
+    }
+
+    // if DB stored files, attach metadata via the map; otherwise, normalize metadata files
     let fileEntries: any[] = [];
     if (dbFiles.length) {
-      // attach metadata to db files where possible
       fileEntries = dbFiles.map((f: any) => ({
         ...f,
-        meta: metaFiles.find((mf: any) => mf.cid === f.cid) ?? undefined,
+        meta: metaByCid.get(String(f.cid)) ?? undefined,
       }));
     } else if (metaFiles.length) {
-      // use metadata files directly (ensure fields align with DB shape)
       fileEntries = metaFiles.map((mf: any) => ({
         cid: mf.cid,
         filename: mf.filename ?? mf.name,
         mime: mf.mime,
         size: mf.size,
-        iv: mf.iv, // iv stored in metadata.json
+        iv: mf.iv,
         meta: mf,
       }));
     } else {
@@ -279,38 +300,46 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
 
     // If we have an AES key, attempt to decrypt each file and produce a usable URL (data: or signed)
     if (rawAesKey && output.files.length) {
-      const filesOut: any[] = [];
-      for (const f of output.files) {
+      // decrypt files in parallel (best-effort per file). Note: this may open multiple streams concurrently.
+      const decryptTasks = output.files.map(async (f: any) => {
         try {
           const encryptedStream = await storage.fetchFileStreamByCid(f.cid);
-          // decryptFileToSignedUrl should use f.iv || f.meta?.iv to decrypt
           const signedUrl = await decryptFileToSignedUrl(
             encryptedStream,
             rawAesKey,
             f
           );
-          filesOut.push({ ...f, decryptedUrl: signedUrl });
+          return { ...f, decryptedUrl: signedUrl };
         } catch (err) {
           console.warn("failed to decrypt file", f.cid, err);
-          filesOut.push({
-            ...f,
-            decryptedUrl: null,
-            decryptError: true,
-          });
+          return { ...f, decryptedUrl: null, decryptError: true };
         }
-      }
+      });
+
+      const filesOut = await Promise.all(decryptTasks);
       output.files = filesOut;
     }
 
     // Map decrypted file URLs into domain objects (deedUpload, front/back/selfie)
     if (Array.isArray(output.files) && output.files.length) {
+      // build a fast lookup map for file purpose tags
+      const purposeMap = new Map<string, any>();
+      for (const f of output.files) {
+        const candidates = [
+          f.tag,
+          f.meta?.tag,
+          f.purpose,
+          f.meta?.purpose,
+        ].filter(Boolean);
+        for (const c of candidates) {
+          try {
+            purposeMap.set(String(c).toLowerCase(), f);
+          } catch {}
+        }
+      }
+
       const findByPurpose = (purpose: string) =>
-        output.files.find((f: any) => {
-          const p = (f.tag || f.meta?.tag || f.purpose || f.meta?.purpose || "")
-            .toString()
-            .toLowerCase();
-          return p === purpose.toLowerCase();
-        });
+        purposeMap.get(String(purpose).toLowerCase()) ?? null;
 
       if (output.landTitleData) {
         const deed = findByPurpose("land_deed");

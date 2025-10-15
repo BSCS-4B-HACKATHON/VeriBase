@@ -30,6 +30,8 @@ import {
 import { getRequestById } from "@/lib/request";
 import { useWallet } from "@/hooks/useWallet";
 import { useParams } from "next/navigation";
+import { createWalletClient, custom, WalletClient } from "viem";
+import { baseSepolia } from "viem/chains";
 import {
   BE_URL,
   buildAndUploadMetadata,
@@ -52,7 +54,6 @@ type RequestType = "national-id" | "land-title";
 
 interface NationalIdData {
   firstName: string;
-  middleName: string;
   lastName: string;
   idNumber: string;
   issueDate: string;
@@ -64,7 +65,6 @@ interface NationalIdData {
 
 interface LandTitleData {
   firstName: string;
-  middleName: string;
   lastName: string;
   latitude: string;
   longitude: string;
@@ -84,7 +84,7 @@ interface RequestData {
 }
 
 export default function RequestPage() {
-  const { address, walletClient } = useWallet();
+  const { address: walletAddress, isConnected } = useWallet();
   const { id } = useParams();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -92,16 +92,64 @@ export default function RequestPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [requestData, setRequestData] = useState<RequestData | null>(null);
   const [editedData, setEditedData] = useState<RequestData | null>(null);
+  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
+  const [address, setAddress] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("vb_address") : null
+  );
+  const [walletCheckComplete, setWalletCheckComplete] = useState(false);
+
+  // Initialize viem wallet client manually (same as new page)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const init = async () => {
+      const provider = (window as any).ethereum;
+      if (!provider) {
+        setWalletCheckComplete(true);
+        return;
+      }
+
+      try {
+        const c = createWalletClient({
+          transport: custom(window.ethereum),
+          chain: baseSepolia,
+        });
+        setWalletClient(c);
+      } catch (e) {
+        console.warn("viem wallet client creation failed", e);
+      }
+
+      // Give wallet a moment to connect/restore session
+      setTimeout(() => {
+        setWalletCheckComplete(true);
+      }, 1000);
+    };
+
+    init();
+  }, []);
 
   console.log("Params ID:", id);
 
   // Fetch request data
   useEffect(() => {
+    // Don't fetch until wallet check is complete
+    if (!walletCheckComplete) {
+      return;
+    }
+
     const fetchRequest = async () => {
       setIsLoading(true);
       try {
+        const fetchAddress = walletAddress ?? address;
+
+        // Don't fetch if we don't have an address yet (wallet still connecting)
+        if (!fetchAddress) {
+          setIsLoading(false);
+          return;
+        }
+
         const r = await getRequestById(
-          address || "",
+          fetchAddress,
           Array.isArray(id) ? id[0] : id ?? ""
         ); // uses your helper
         if (!r) throw new Error("Request not found");
@@ -131,7 +179,6 @@ export default function RequestPage() {
           nationalIdData: r.nationalIdData
             ? {
                 firstName: r.nationalIdData.firstName ?? "",
-                middleName: r.nationalIdData.middleName ?? "",
                 lastName: r.nationalIdData.lastName ?? "",
                 idNumber: r.nationalIdData.idNumber ?? "",
                 issueDate: r.nationalIdData.issueDate ?? "",
@@ -154,7 +201,6 @@ export default function RequestPage() {
           landTitleData: r.landTitleData
             ? {
                 firstName: r.landTitleData.firstName ?? "",
-                middleName: r.landTitleData.middleName ?? "",
                 lastName: r.landTitleData.lastName ?? "",
                 latitude: r.landTitleData.latitude ?? "",
                 longitude: r.landTitleData.longitude ?? "",
@@ -179,7 +225,7 @@ export default function RequestPage() {
     };
 
     fetchRequest();
-  }, [id]);
+  }, [id, address, walletAddress, walletCheckComplete]);
 
   console.log("Request Data:", requestData);
   console.log("Edited Data:", editedData);
@@ -202,7 +248,8 @@ export default function RequestPage() {
         toast.error("No changes to save");
         return;
       }
-      if (!address || !walletClient) {
+      const submitAddress = walletAddress ?? address;
+      if (!submitAddress) {
         toast.error("Wallet not connected");
         return;
       }
@@ -252,7 +299,6 @@ export default function RequestPage() {
         const nid = editedData.nationalIdData!;
         const form = {
           firstName: nid.firstName,
-          middleName: nid.middleName,
           lastName: nid.lastName,
           issueDate: nid.issueDate,
           expiryDate: nid.expiryDate,
@@ -263,7 +309,7 @@ export default function RequestPage() {
         };
 
         await updateNationalId(id as string, form, {
-          address,
+          address: submitAddress,
           walletClient,
           BE_URL,
           toast: {
@@ -271,17 +317,92 @@ export default function RequestPage() {
               toast.success(s);
             },
             error: function (s: string): void {
-              throw new Error("Function not implemented.");
+              toast.error(s);
             },
           },
+          onSuccess: () => {
+            setIsEditMode(false);
+            setIsSaving(false);
+            // Refetch the data instead of hard reload
+            const fetchAddress = walletAddress ?? address;
+            getRequestById(
+              fetchAddress || "",
+              Array.isArray(id) ? id[0] : id ?? ""
+            )
+              .then((r) => {
+                if (r) {
+                  const files = Array.isArray(r.files)
+                    ? r.files
+                    : r.request?.files ?? [];
+                  const rawType = (r.requestType ??
+                    r.type ??
+                    "national-id") as string;
+                  const normalized = rawType.replace(/_/g, "-").toLowerCase();
+                  const canonicalType: RequestType =
+                    normalized === "national-id" || normalized === "national_id"
+                      ? "national-id"
+                      : "land-title";
+
+                  const mapped: RequestData = {
+                    id:
+                      r.requestId ??
+                      r.id ??
+                      (Array.isArray(id) ? id[0] : id ?? ""),
+                    type: canonicalType,
+                    status: (r.status ?? "pending") as RequestStatus,
+                    createdAt: r.createdAt ?? new Date().toISOString(),
+                    updatedAt:
+                      r.updatedAt ?? r.createdAt ?? new Date().toISOString(),
+                    nationalIdData: r.nationalIdData
+                      ? {
+                          firstName: r.nationalIdData.firstName ?? "",
+                          lastName: r.nationalIdData.lastName ?? "",
+                          idNumber: r.nationalIdData.idNumber ?? "",
+                          issueDate: r.nationalIdData.issueDate ?? "",
+                          expiryDate: r.nationalIdData.expiryDate ?? "",
+                          frontPicture:
+                            r.nationalIdData.frontPicture ??
+                            findFileUrl(files, ["front_id"]) ??
+                            null,
+                          backPicture:
+                            r.nationalIdData.backPicture ??
+                            findFileUrl(files, ["back_id"]) ??
+                            null,
+                          selfieWithId:
+                            r.nationalIdData.selfieWithId ??
+                            findFileUrl(files, ["selfie_with_id"]) ??
+                            null,
+                        }
+                      : undefined,
+                    landTitleData: r.landTitleData
+                      ? {
+                          firstName: r.landTitleData.firstName ?? "",
+                          lastName: r.landTitleData.lastName ?? "",
+                          latitude: r.landTitleData.latitude ?? "",
+                          longitude: r.landTitleData.longitude ?? "",
+                          titleNumber: r.landTitleData.titleNumber ?? "",
+                          lotArea: r.landTitleData.lotArea ?? "",
+                          deedUpload:
+                            r.landTitleData.deedUpload ??
+                            findFileUrl(files, ["land_deed"]) ??
+                            null,
+                        }
+                      : undefined,
+                  };
+                  setRequestData(mapped);
+                  setEditedData(mapped);
+                }
+              })
+              .catch((err) => {
+                console.error("Refetch error:", err);
+              });
+          },
         });
-        window.location.reload();
         return;
       } else if (editedData.type === "land-title") {
         const ltd = editedData.landTitleData!;
         const form = {
           firstName: ltd.firstName,
-          middleName: ltd.middleName,
           lastName: ltd.lastName,
           latitude: ltd.latitude,
           longitude: ltd.longitude,
@@ -290,7 +411,7 @@ export default function RequestPage() {
           deedUpload: await convertToFile(ltd.deedUpload, "deed.jpg"),
         };
         await updateLandTitle(id as string, form, {
-          address,
+          address: submitAddress,
           walletClient,
           BE_URL,
           toast: {
@@ -298,11 +419,87 @@ export default function RequestPage() {
               toast.success(s);
             },
             error: function (s: string): void {
-              throw new Error("Function not implemented.");
+              toast.error(s);
             },
           },
+          onSuccess: () => {
+            setIsEditMode(false);
+            setIsSaving(false);
+            // Refetch the data instead of hard reload
+            const fetchAddress = walletAddress ?? address;
+            getRequestById(
+              fetchAddress || "",
+              Array.isArray(id) ? id[0] : id ?? ""
+            )
+              .then((r) => {
+                if (r) {
+                  const files = Array.isArray(r.files)
+                    ? r.files
+                    : r.request?.files ?? [];
+                  const rawType = (r.requestType ??
+                    r.type ??
+                    "national-id") as string;
+                  const normalized = rawType.replace(/_/g, "-").toLowerCase();
+                  const canonicalType: RequestType =
+                    normalized === "national-id" || normalized === "national_id"
+                      ? "national-id"
+                      : "land-title";
+
+                  const mapped: RequestData = {
+                    id:
+                      r.requestId ??
+                      r.id ??
+                      (Array.isArray(id) ? id[0] : id ?? ""),
+                    type: canonicalType,
+                    status: (r.status ?? "pending") as RequestStatus,
+                    createdAt: r.createdAt ?? new Date().toISOString(),
+                    updatedAt:
+                      r.updatedAt ?? r.createdAt ?? new Date().toISOString(),
+                    nationalIdData: r.nationalIdData
+                      ? {
+                          firstName: r.nationalIdData.firstName ?? "",
+                          lastName: r.nationalIdData.lastName ?? "",
+                          idNumber: r.nationalIdData.idNumber ?? "",
+                          issueDate: r.nationalIdData.issueDate ?? "",
+                          expiryDate: r.nationalIdData.expiryDate ?? "",
+                          frontPicture:
+                            r.nationalIdData.frontPicture ??
+                            findFileUrl(files, ["front_id"]) ??
+                            null,
+                          backPicture:
+                            r.nationalIdData.backPicture ??
+                            findFileUrl(files, ["back_id"]) ??
+                            null,
+                          selfieWithId:
+                            r.nationalIdData.selfieWithId ??
+                            findFileUrl(files, ["selfie_with_id"]) ??
+                            null,
+                        }
+                      : undefined,
+                    landTitleData: r.landTitleData
+                      ? {
+                          firstName: r.landTitleData.firstName ?? "",
+                          lastName: r.landTitleData.lastName ?? "",
+                          latitude: r.landTitleData.latitude ?? "",
+                          longitude: r.landTitleData.longitude ?? "",
+                          titleNumber: r.landTitleData.titleNumber ?? "",
+                          lotArea: r.landTitleData.lotArea ?? "",
+                          deedUpload:
+                            r.landTitleData.deedUpload ??
+                            findFileUrl(files, ["land_deed"]) ??
+                            null,
+                        }
+                      : undefined,
+                  };
+                  setRequestData(mapped);
+                  setEditedData(mapped);
+                }
+              })
+              .catch((err) => {
+                console.error("Refetch error:", err);
+              });
+          },
         });
-        window.location.reload();
         return;
       } else {
         toast.error("Unknown request type");
@@ -412,7 +609,8 @@ export default function RequestPage() {
     });
   };
 
-  if (isLoading) {
+  // Show loading while checking wallet or fetching data
+  if (isLoading || !walletCheckComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -425,6 +623,27 @@ export default function RequestPage() {
               <Skeleton className="h-[400px] w-full rounded-2xl" />
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if wallet is connected after wallet check is complete
+  const currentAddress = walletAddress ?? address;
+  if (!currentAddress) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto text-center">
+          <Card className="p-8 max-w-md mx-auto">
+            <h1 className="text-2xl font-bold mb-4">Wallet Not Connected</h1>
+            <p className="text-muted-foreground mb-6">
+              Please connect your wallet to view this request.
+            </p>
+            <Button onClick={() => router.push("/requests")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Requests
+            </Button>
+          </Card>
         </div>
       </div>
     );
@@ -551,34 +770,6 @@ export default function RequestPage() {
                                   nationalIdData: {
                                     ...editedData.nationalIdData!,
                                     firstName: e.target.value,
-                                  },
-                                })
-                              }
-                              disabled={!isEditMode}
-                              className={
-                                !isEditMode
-                                  ? "bg-muted/50 cursor-not-allowed"
-                                  : ""
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="middleName">
-                              Middle Name{" "}
-                              <span className="text-muted-foreground text-xs">
-                                (optional)
-                              </span>
-                            </Label>
-                            <Input
-                              id="middleName"
-                              value={editedData.nationalIdData.middleName}
-                              onChange={(e) =>
-                                setEditedData({
-                                  ...editedData,
-                                  nationalIdData: {
-                                    ...editedData.nationalIdData!,
-                                    middleName: e.target.value,
                                   },
                                 })
                               }
@@ -827,34 +1018,6 @@ export default function RequestPage() {
                                   landTitleData: {
                                     ...editedData.landTitleData!,
                                     firstName: e.target.value,
-                                  },
-                                })
-                              }
-                              disabled={!isEditMode}
-                              className={
-                                !isEditMode
-                                  ? "bg-muted/50 cursor-not-allowed"
-                                  : ""
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="landMiddleName">
-                              Middle Name{" "}
-                              <span className="text-muted-foreground text-xs">
-                                (optional)
-                              </span>
-                            </Label>
-                            <Input
-                              id="landMiddleName"
-                              value={editedData.landTitleData.middleName}
-                              onChange={(e) =>
-                                setEditedData({
-                                  ...editedData,
-                                  landTitleData: {
-                                    ...editedData.landTitleData!,
-                                    middleName: e.target.value,
                                   },
                                 })
                               }

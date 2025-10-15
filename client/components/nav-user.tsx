@@ -44,14 +44,9 @@ export function NavUser() {
 
   const avatarSrc = null; // replace with ENS/avatar fetch if you add it later
 
-  // Only redirect if mounted AND definitively not connected
-  // Wagmi's isConnected will be true if wallet is reconnected
-  useEffect(() => {
-    if (mounted && !isConnected) {
-      console.log("NavUser: Not connected after mount, redirecting...");
-      router.replace("/");
-    }
-  }, [isConnected, mounted, router]);
+  // Removed auto-redirect on disconnect to prevent redirect during page reload
+  // User can manually navigate back if needed, or use the disconnect button
+  // This prevents the component from redirecting when wagmi is reconnecting
 
   const handleDisconnect = async () => {
     await disconnectWallet();

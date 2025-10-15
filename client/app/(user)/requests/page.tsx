@@ -27,6 +27,7 @@ export default function RequestsPage() {
       setIsLoading(true);
       try {
         const mintRequests = await getAllUsersMintRequests(address || "");
+        console.log("Fetched user mint requests:", mintRequests);
         setRequests(mintRequests);
       } catch (error) {
         console.error("Error fetching user mint requests:", error);
