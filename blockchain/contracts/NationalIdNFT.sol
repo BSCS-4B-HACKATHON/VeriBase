@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @notice Non-transferable NFT representing a National ID
  * @dev Each wallet can only hold ONE National ID NFT. Tokens are soul-bound (non-transferable).
  *      Metadata is stored on-chain and matches the database schema structure.
+ *      Metadata is 100% unique - duplicate metadataHash rejected.
  */
 contract NationalIdNFT is ERC721, Ownable {
     // ============ Structs ============
@@ -48,6 +49,9 @@ contract NationalIdNFT is ERC721, Ownable {
     /// @notice Maps tokenId => wallet address
     mapping(uint256 => address) private _tokenIdToWallet;
     
+    /// @notice Maps metadataHash => exists (for uniqueness check)
+    mapping(string => bool) private _metadataHashExists;
+    
     // ============ Events ============
     
     event NationalIdMinted(
@@ -62,6 +66,7 @@ contract NationalIdNFT is ERC721, Ownable {
     error TransferNotAllowed();
     error TokenDoesNotExist();
     error InvalidAddress();
+    error DuplicateMetadata();
     
     // ============ Constructor ============
     
@@ -73,7 +78,7 @@ contract NationalIdNFT is ERC721, Ownable {
     
     /**
      * @notice Mints a National ID NFT to a wallet
-     * @dev Only one National ID per wallet allowed
+     * @dev Only one National ID per wallet allowed. Metadata must be unique.
      */
     function mintNationalId(
         address to,
@@ -87,6 +92,7 @@ contract NationalIdNFT is ERC721, Ownable {
     ) external onlyOwner returns (uint256) {
         if (to == address(0)) revert InvalidAddress();
         if (_walletToTokenId[to] != 0) revert WalletAlreadyHasNationalId();
+        if (_metadataHashExists[metadataHash]) revert DuplicateMetadata();
         
         uint256 tokenId = _tokenIdCounter++;
         
@@ -102,6 +108,7 @@ contract NationalIdNFT is ERC721, Ownable {
         
         _walletToTokenId[to] = tokenId;
         _tokenIdToWallet[tokenId] = to;
+        _metadataHashExists[metadataHash] = true;
         
         emit NationalIdMinted(to, tokenId, metadataCid);
         
@@ -152,6 +159,13 @@ contract NationalIdNFT is ERC721, Ownable {
      */
     function hasNationalId(address wallet) external view returns (bool) {
         return _walletToTokenId[wallet] != 0;
+    }
+    
+    /**
+     * @notice Checks if metadata hash already exists
+     */
+    function isMetadataUnique(string calldata metadataHash) external view returns (bool) {
+        return !_metadataHashExists[metadataHash];
     }
     
     /**

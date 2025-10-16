@@ -213,7 +213,7 @@ export default function RequestCard({
                             }}
                             variant="default"
                             size="sm"
-                            className="flex-1 h-10 w-full"
+                            className="flex-1 h-10 w-full cursor-pointer"
                         >
                             View
                         </Button>
@@ -227,7 +227,7 @@ export default function RequestCard({
                                 variant="outline"
                                 size="sm"
                                 onClick={(e) => e.stopPropagation()}
-                                className="h-10 w-10 p-0 ml-2"
+                                className="h-10 w-10 p-0 ml-2 cursor-pointer"
                                 aria-label="More actions"
                             >
                                 <MoreHorizontal className="h-4 w-4" />

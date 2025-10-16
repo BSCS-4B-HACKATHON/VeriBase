@@ -6,10 +6,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title LandOwnershipNFT
- * @notice NFT representing land ownership with controlled transfers
- * @dev Wallets can hold multiple land ownership NFTs. Transfers are only allowed through
- *      authorized transfer contract to enable regulated land sales/transfers.
- *      Metadata is stored on-chain and matches the database schema structure.
+ * @notice Transferable NFT representing Land Ownership
+ * @dev Multiple land ownership NFTs per wallet allowed.
+ *      Transfers ONLY through authorized contract (LandTransferContract).
+ *      Metadata is 100% unique - duplicate metadataHash rejected.
  */
 contract LandOwnershipNFT is ERC721, Ownable {
     // ============ Structs ============
@@ -49,6 +49,9 @@ contract LandOwnershipNFT is ERC721, Ownable {
     /// @notice Authorized transfer contract that can facilitate transfers
     address public transferContract;
     
+    /// @notice Maps metadataHash => exists (for uniqueness check)
+    mapping(string => bool) private _metadataHashExists;
+    
     // ============ Events ============
     
     event LandOwnershipMinted(
@@ -73,6 +76,7 @@ contract LandOwnershipNFT is ERC721, Ownable {
     error UnauthorizedTransfer();
     error TokenDoesNotExist();
     error InvalidAddress();
+    error DuplicateMetadata();
     
     // ============ Constructor ============
     
@@ -84,7 +88,7 @@ contract LandOwnershipNFT is ERC721, Ownable {
     
     /**
      * @notice Mints a Land Ownership NFT to a wallet
-     * @dev Multiple land ownership NFTs per wallet allowed
+     * @dev Multiple land ownership NFTs per wallet allowed. Metadata must be unique.
      */
     function mintLandOwnership(
         address to,
@@ -97,6 +101,7 @@ contract LandOwnershipNFT is ERC721, Ownable {
         uint256 consentTimestamp
     ) external onlyOwner returns (uint256) {
         if (to == address(0)) revert InvalidAddress();
+        if (_metadataHashExists[metadataHash]) revert DuplicateMetadata();
         
         uint256 tokenId = _tokenIdCounter++;
         
@@ -111,6 +116,7 @@ contract LandOwnershipNFT is ERC721, Ownable {
         _tokenMetadata[tokenId].consentTimestamp = consentTimestamp;
         
         _tokenIdToWallet[tokenId] = to;
+        _metadataHashExists[metadataHash] = true;
         
         emit LandOwnershipMinted(to, tokenId, metadataCid);
         
@@ -203,6 +209,13 @@ contract LandOwnershipNFT is ERC721, Ownable {
     function getMetadata(uint256 tokenId) external view returns (LandOwnershipMetadata memory) {
         if (_tokenIdToWallet[tokenId] == address(0)) revert TokenDoesNotExist();
         return _tokenMetadata[tokenId];
+    }
+    
+    /**
+     * @notice Checks if metadata hash already exists
+     */
+    function isMetadataUnique(string calldata metadataHash) external view returns (bool) {
+        return !_metadataHashExists[metadataHash];
     }
     
     /**
