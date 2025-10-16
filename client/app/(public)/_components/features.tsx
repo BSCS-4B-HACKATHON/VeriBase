@@ -1,69 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { Rocket, Code, Paintbrush } from "lucide-react";
-
-const features = [
-  {
-    step: "Step 1",
-    title: "Build Faster",
-    content:
-      "Create your MVP in record time with our pre-built blocks and components.",
-    icon: <Rocket className="text-primary h-6 w-6" />,
-    image:
-      "https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?q=80&w=2070&auto=format&fit=crop",
-  },
-  {
-    step: "Step 2",
-    title: "Customize Easily",
-    content:
-      "Tailor every component to your needs with our intuitive design system and flexible architecture.",
-    icon: <Paintbrush className="text-primary h-6 w-6" />,
-    image:
-      "https://images.unsplash.com/photo-1618761714954-0b8cd0026356?q=80&w=2070&auto=format&fit=crop",
-  },
-  {
-    step: "Step 3",
-    title: "Deploy Confidently",
-    content:
-      "Launch your product with confidence using our optimized, responsive, and accessible components.",
-    icon: <Code className="text-primary h-6 w-6" />,
-    image:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop",
-  },
-  {
-    step: "Step 4",
-    title: "Add Yours!",
-    content:
-      "Contribute your own blocks and become part of the MVPBlocks community.",
-    icon: <Code className="text-primary h-6 w-6" />,
-    image:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop",
-  },
-];
+import { ShieldCheck, FileCheck, Lock, Search, Zap } from "lucide-react";
+import { WobbleCard } from "@/components/ui/wobble-card";
+import { motion } from "framer-motion";
 
 export default function Features() {
-  const [currentFeature, setCurrentFeature] = useState(0);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (progress < 100) {
-        setProgress((prev) => prev + 100 / (4000 / 100));
-      } else {
-        setCurrentFeature((prev) => (prev + 1) % features.length);
-        setProgress(0);
-      }
-    }, 100);
-
-    return () => clearInterval(timer);
-  }, [progress]);
-
   return (
-    <div className="p-8 md:p-12 mb-24">
-      <div className="mx-auto w-full max-w-7xl">
+    <section className="py-12 md:py-20">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="relative mx-auto mb-12 max-w-2xl sm:text-center">
           <div className="relative z-10">
             <h2
@@ -84,88 +33,75 @@ export default function Features() {
             >
               Features
             </h2>
-            <p className="font-geist text-foreground/60">
+            <p className="font-geist text-foreground/60 text-center">
               VeriBase helps you verify your ownership securely and
               transparently.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:gap-10">
-          <div className="order-2 space-y-8 md:order-1">
-            {features.map((feature, index) => (
-              <motion.div
-                key={index}
-                className="flex items-center gap-6 md:gap-8"
-                initial={{ opacity: 0.3, x: -20 }}
-                animate={{
-                  opacity: index === currentFeature ? 1 : 0.3,
-                  x: 0,
-                  scale: index === currentFeature ? 1.05 : 1,
-                }}
-                transition={{ duration: 0.5 }}
-              >
-                <motion.div
-                  className={cn(
-                    "flex h-12 w-12 items-center justify-center rounded-full border-2 md:h-14 md:w-14",
-                    index === currentFeature
-                      ? "border-primary bg-primary/10 text-primary scale-110 [box-shadow:0_0_15px_rgba(255,255,255,0.2)]"
-                      : "border-muted-foreground bg-muted"
-                  )}
-                >
-                  {feature.icon}
-                </motion.div>
-
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold md:text-2xl">
-                    {feature.title}
-                  </h3>
-                  <p className="text-muted-foreground text-sm md:text-base">
-                    {feature.content}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <div
-            className={cn(
-              "border-primary/20 relative order-1 h-[200px] overflow-hidden rounded-xl border [box-shadow:0_5px_30px_-15px_rgba(255,255,255,0.2)] md:order-2 md:h-[300px] lg:h-[400px]"
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-7xl mx-auto w-full">
+          <WobbleCard
+            containerClassName="col-span-1 lg:col-span-2 min-h-[300px]"
+            className=""
           >
-            <AnimatePresence mode="wait">
-              {features.map(
-                (feature, index) =>
-                  index === currentFeature && (
-                    <motion.div
-                      key={index}
-                      className="absolute inset-0 overflow-hidden rounded-lg"
-                      initial={{ y: 100, opacity: 0, rotateX: -20 }}
-                      animate={{ y: 0, opacity: 1, rotateX: 0 }}
-                      exit={{ y: -100, opacity: 0, rotateX: 20 }}
-                      transition={{ duration: 0.5, ease: "easeInOut" }}
-                    >
-                      <img
-                        src={feature.image}
-                        alt={feature.title}
-                        className="h-full w-full transform object-cover transition-transform hover:scale-105"
-                        width={1000}
-                        height={500}
-                      />
-                      <div className="from-background via-background/50 absolute right-0 bottom-0 left-0 h-2/3 bg-gradient-to-t to-transparent" />
+            <div className="max-w-xs">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#3ECF8E]/10 backdrop-blur-sm border border-[#3ECF8E]/20 mb-4 transition-transform duration-300 hover:scale-110">
+                <Lock className="w-6 h-6 text-[#3ECF8E]" />
+              </div>
+              <h2 className="text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
+                Proof Without Exposure
+              </h2>
+              <p className="mt-4 text-left text-base/6 text-white/90">
+                We turn documents into cryptographic fingerprints — verifiable
+                on-chain, invisible to everyone else.
+              </p>
+            </div>
+          </WobbleCard>
 
-                      <div className="bg-background/80 absolute bottom-4 left-4 rounded-lg p-2 backdrop-blur-sm">
-                        <span className="text-primary text-xs font-medium">
-                          {feature.step}
-                        </span>
-                      </div>
-                    </motion.div>
-                  )
-              )}
-            </AnimatePresence>
-          </div>
+          <WobbleCard containerClassName="col-span-1 min-h-[300px]">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#3ECF8E]/10 backdrop-blur-sm border border-[#3ECF8E]/20 mb-4 transition-transform duration-300 hover:scale-110">
+              <FileCheck className="w-6 h-6 text-[#3ECF8E]" />
+            </div>
+            <h2 className="max-w-80 text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
+              Minted by You, Verified Once
+            </h2>
+            <p className="mt-4 max-w-[26rem] text-left text-base/6 text-white/80">
+              After a one-time verification, ownership becomes yours to mint —
+              forever secured, forever verifiable.
+            </p>
+          </WobbleCard>
+
+          <WobbleCard containerClassName="col-span-1 min-h-[300px]">
+            <div className="max-w-sm">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#3ECF8E]/10 backdrop-blur-sm border border-[#3ECF8E]/20 mb-4 transition-transform duration-300 hover:scale-110">
+                <Zap className="w-6 h-6 text-[#3ECF8E]" />
+              </div>
+              <h2 className="max-w-sm md:max-w-lg text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
+                Smart Efficiency
+              </h2>
+              <p className="mt-4 max-w-[26rem] text-left text-base/6 text-white/80">
+                Batch minting, optimized gas costs, and L2 performance — because
+                security shouldn’t slow you down.
+              </p>
+            </div>
+          </WobbleCard>
+          <WobbleCard containerClassName="col-span-1 lg:col-span-2 min-h-[300px]">
+            <div className="max-w-sm">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#3ECF8E]/10 backdrop-blur-sm border border-[#3ECF8E]/20 mb-4 transition-transform duration-300 hover:scale-110">
+                <Search className="w-6 h-6 text-[#3ECF8E]" />
+              </div>
+              <h2 className="max-w-sm md:max-w-lg text-left text-balance text-base md:text-xl lg:text-3xl font-semibold tracking-[-0.015em] text-white">
+                Tamper-Proof, Transparent, Traceable
+              </h2>
+              <p className="mt-4 max-w-[26rem] text-left text-base/6 text-white/80">
+                No duplicates, no rewrites, no “lost files.” Every proof lives
+                immutably on-chain — ready to be audited anytime.
+              </p>
+            </div>
+          </WobbleCard>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </section>
   );
 }

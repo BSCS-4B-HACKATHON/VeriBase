@@ -45,9 +45,6 @@ export default function WhyNotVeriBaseSection({
 
   return (
     <section className="relative py-16 md:py-24 overflow-hidden">
-      {/* Subtle top gradient background */}
-      <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-[#3ECF8E]/[0.03] to-transparent pointer-events-none" />
-
       <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10">
         {/* Header */}
         <div className="text-center mb-12 md:mb-16 animate-fade-in-up">

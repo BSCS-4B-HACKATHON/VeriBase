@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";
+import { IconDashboard } from "@tabler/icons-react";
 
 function ConnectDropdown() {
   const { connect, connectors } = useConnect();
@@ -120,7 +121,7 @@ export default function Hero() {
                   href="/home"
                   className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 sm:px-6 w-full rounded-lg shadow-lg font-mono text-xs sm:text-sm md:text-base font-semibold tracking-wider text-black h-[50px] sm:h-[60px]"
                 >
-                  <Wallet className="mr-2 h-4 w-4" /> DASHBOARD
+                  <IconDashboard className="mr-2 size-5" /> DASHBOARD
                 </Link>
               )}
               <Link
@@ -134,8 +135,7 @@ export default function Hero() {
             </div>
 
             {/* Mini Verification Stats Row - Mobile */}
-            <div className="grid grid-cols-2 gap-3 mt-6 mb-6">
-              {/* Total Verifications */}
+            {/* <div className="grid grid-cols-2 gap-3 mt-6 mb-6">
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-3 hover:border-[#3ECF8E]/40 hover:scale-105 transition-all duration-300 animate-fade-in-up delay-100">
                 <div className="absolute top-2 right-2 opacity-20 group-hover:opacity-30 transition-opacity">
                   <ShieldCheck className="w-5 h-5 text-[#3ECF8E]" />
@@ -150,8 +150,6 @@ export default function Hero() {
                   Documents secured on-chain
                 </div>
               </div>
-
-              {/* Land Title Owners */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-3 hover:border-[#3ECF8E]/40 hover:scale-105 transition-all duration-300 animate-fade-in-up delay-200">
                 <div className="absolute top-2 right-2 opacity-20 group-hover:opacity-30 transition-opacity">
                   <MapPin className="w-5 h-5 text-[#3ECF8E]" />
@@ -166,8 +164,6 @@ export default function Hero() {
                   Legally validated holders
                 </div>
               </div>
-
-              {/* National ID Verifications */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-3 hover:border-[#3ECF8E]/40 hover:scale-105 transition-all duration-300 animate-fade-in-up delay-300">
                 <div className="absolute top-2 right-2 opacity-20 group-hover:opacity-30 transition-opacity">
                   <IdCard className="w-5 h-5 text-[#3ECF8E]" />
@@ -182,8 +178,6 @@ export default function Hero() {
                   Trusted by institutions
                 </div>
               </div>
-
-              {/* Avg Verification Time */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-3 hover:border-[#3ECF8E]/40 hover:scale-105 transition-all duration-300 animate-fade-in-up delay-400">
                 <div className="absolute top-2 right-2 opacity-20 group-hover:opacity-30 transition-opacity">
                   <Zap className="w-5 h-5 text-[#3ECF8E]" />
@@ -198,7 +192,7 @@ export default function Hero() {
                   On-chain validation speed
                 </div>
               </div>
-            </div>
+            </div>  */}
 
             {/* Animated Verification Flow - Mobile */}
             <div className="flex items-center justify-center gap-2 mb-6 animate-fade-in-up delay-500">
@@ -264,7 +258,7 @@ export default function Hero() {
                 href="/home"
                 className="bg-white hover:bg-gray-100 flex items-center justify-center px-4 md:px-6 lg:px-8 rounded-lg shadow-lg font-mono text-sm md:text-base font-semibold tracking-wider text-black h-[50px] md:h-[60px] min-w-[180px] md:min-w-[220px]"
               >
-                <Wallet className="mr-2 h-4 w-4" /> DASHBOARD
+                <IconDashboard className="mr-2 size-5" /> DASHBOARD
               </Link>
             )}
             <Link
@@ -278,8 +272,7 @@ export default function Hero() {
           </div>
 
           {/* Mini Verification Stats Row - Desktop */}
-          <div className="relative mb-10">
-            {/* Optional section label */}
+          {/* <div className="relative mb-10">
             <div className="text-center mb-6 animate-fade-in-up">
               <p className="text-xs uppercase tracking-wider text-[#3ECF8E]/70 font-mono">
                 Trusted by thousands — verified on-chain
@@ -287,7 +280,6 @@ export default function Hero() {
             </div>
 
             <div className="grid grid-cols-3 gap-4 max-w-5xl mx-auto">
-              {/* Total Verifications */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-5 hover:border-[#3ECF8E]/50 hover:scale-105 hover:shadow-lg hover:shadow-[#3ECF8E]/20 transition-all duration-300 animate-fade-in-up delay-100">
                 <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-40 transition-opacity duration-300">
                   <ShieldCheck className="w-6 h-6 text-[#3ECF8E]" />
@@ -303,7 +295,6 @@ export default function Hero() {
                 </div>
               </div>
 
-              {/* Land Title Owners */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-5 hover:border-[#3ECF8E]/50 hover:scale-105 hover:shadow-lg hover:shadow-[#3ECF8E]/20 transition-all duration-300 animate-fade-in-up delay-200">
                 <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-40 transition-opacity duration-300">
                   <MapPin className="w-6 h-6 text-[#3ECF8E]" />
@@ -319,7 +310,6 @@ export default function Hero() {
                 </div>
               </div>
 
-              {/* National ID Verifications */}
               <div className="group relative bg-gradient-to-br from-[#3ECF8E]/5 to-emerald-500/10 backdrop-blur-sm border border-[#3ECF8E]/20 rounded-xl p-5 hover:border-[#3ECF8E]/50 hover:scale-105 hover:shadow-lg hover:shadow-[#3ECF8E]/20 transition-all duration-300 animate-fade-in-up delay-300">
                 <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-40 transition-opacity duration-300">
                   <IdCard className="w-6 h-6 text-[#3ECF8E]" />
@@ -336,9 +326,8 @@ export default function Hero() {
               </div>
             </div>
 
-            {/* Subtle divider gradient lines between cards (optional decorative element) */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-px bg-gradient-to-r from-transparent via-[#3ECF8E]/10 to-transparent pointer-events-none" />
-          </div>
+          </div> */}
 
           {/* Animated Verification Flow - Desktop */}
           <div className="flex items-center justify-center gap-4 mb-12 max-w-2xl mx-auto animate-fade-in-up delay-500">
