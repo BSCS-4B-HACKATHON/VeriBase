@@ -63,81 +63,102 @@ export default function DashboardHome() {
   });
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - replace with actual API calls
-    setStats({
-      total: 24,
-      pending: 3,
-      approved: 19,
-      rejected: 2,
-    });
+    const fetchStats = async () => {
+      if (!address) {
+        setLoading(false);
+        return;
+      }
 
-    setRecentRequests([
-      {
-        id: "VRF-001",
-        name: "Property Title - 123 Main St",
-        type: "Land Title",
-        status: "approved",
-        date: "2025-10-14",
-      },
-      {
-        id: "VRF-002",
-        name: "National ID Verification",
-        type: "National ID",
-        status: "pending",
-        date: "2025-10-13",
-      },
-      {
-        id: "VRF-003",
-        name: "Land Deed - Plot 456",
-        type: "Land Title",
-        status: "pending",
-        date: "2025-10-12",
-      },
-      {
-        id: "VRF-004",
-        name: "Government ID Update",
-        type: "National ID",
-        status: "approved",
-        date: "2025-10-11",
-      },
-    ]);
+      try {
+        setLoading(true);
+        const BE_URL =
+          process.env.NEXT_PUBLIC_BE_URL || "http://localhost:6969";
 
-    setActivities([
-      {
-        id: "1",
-        message: "Land Title #VRF-001 verified successfully",
-        timestamp: "2 hours ago",
-        type: "success",
-      },
-      {
-        id: "2",
-        message: "National ID verification request submitted",
-        timestamp: "5 hours ago",
-        type: "info",
-      },
-      {
-        id: "3",
-        message: "Wallet connected from new device",
-        timestamp: "1 day ago",
-        type: "info",
-      },
-    ]);
+        // Fetch user-specific stats
+        const statsRes = await fetch(`${BE_URL}/api/stats/user/${address}`);
+        if (statsRes.ok) {
+          const data = await statsRes.json();
+
+          setStats({
+            total: data.stats.totalNFTsOwned || 0,
+            pending: data.stats.pendingRequests || 0,
+            approved: data.stats.verifiedRequests || 0,
+            rejected: data.stats.rejectedRequests || 0,
+          });
+
+          // Map recent requests to UI format
+          if (
+            data.stats.recentRequests &&
+            data.stats.recentRequests.length > 0
+          ) {
+            const mapped = data.stats.recentRequests.map((req: any) => ({
+              id: req.id,
+              name:
+                req.minimalPublicLabel ||
+                `${
+                  req.type === "national_id" ? "National ID" : "Land Title"
+                } Request`,
+              type: req.type === "national_id" ? "National ID" : "Land Title",
+              status: req.status === "verified" ? "approved" : req.status,
+              date: new Date(req.createdAt).toISOString().split("T")[0],
+            }));
+            setRecentRequests(mapped);
+          }
+
+          // Generate activities based on recent requests
+          const recentActivities: Activity[] = [];
+          if (data.stats.verifiedRequests > 0) {
+            recentActivities.push({
+              id: "1",
+              message: `You have ${data.stats.verifiedRequests} approved request(s) ready to mint`,
+              timestamp: "Recently",
+              type: "success",
+            });
+          }
+          if (data.stats.pendingRequests > 0) {
+            recentActivities.push({
+              id: "2",
+              message: `${data.stats.pendingRequests} request(s) awaiting admin approval`,
+              timestamp: "Pending",
+              type: "info",
+            });
+          }
+          if (data.stats.totalNFTsOwned > 0) {
+            recentActivities.push({
+              id: "3",
+              message: `You own ${data.stats.totalNFTsOwned} NFT document(s) on-chain`,
+              timestamp: "On blockchain",
+              type: "success",
+            });
+          }
+          setActivities(recentActivities);
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+        // Keep default values on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
   }, [address]);
 
   const statsCards = [
     {
       title: "NFT Documents",
-      value: stats.total,
+      value: loading ? "..." : stats.total,
       icon: FileCheck,
       color: "",
       iconColor: "text-[#3ECF8E]",
-      change: "+12%",
+      change: null,
     },
     {
       title: "Pending Requests",
-      value: stats.pending,
+      value: loading ? "..." : stats.pending,
       icon: Clock,
       color: "",
       iconColor: "text-yellow-500",
@@ -145,19 +166,19 @@ export default function DashboardHome() {
     },
     {
       title: "Approved",
-      value: stats.approved,
+      value: loading ? "..." : stats.approved,
       icon: CheckCircle2,
       color: "",
       iconColor: "border-muted-foreground",
-      change: "+8%",
+      change: null,
     },
     {
       title: "Rejected",
-      value: stats.rejected,
+      value: loading ? "..." : stats.rejected,
       icon: XCircle,
       color: "",
       iconColor: "",
-      change: "-2%",
+      change: null,
     },
   ];
 

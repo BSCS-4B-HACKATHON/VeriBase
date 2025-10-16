@@ -77,11 +77,11 @@ contract NationalIdNFT is ERC721, Ownable {
     // ============ Owner Functions ============
     
     /**
-     * @notice Mints a National ID NFT to a wallet
+     * @notice Mints a National ID NFT to caller's wallet
      * @dev Only one National ID per wallet allowed. Metadata must be unique.
+     * @dev Public function - users mint for themselves
      */
     function mintNationalId(
-        address to,
         string calldata requestType,
         string calldata minimalPublicLabel,
         string calldata metadataCid,
@@ -89,7 +89,9 @@ contract NationalIdNFT is ERC721, Ownable {
         string calldata uploaderSignature,
         string calldata consentTextVersion,
         uint256 consentTimestamp
-    ) external onlyOwner returns (uint256) {
+    ) external returns (uint256) {
+        address to = msg.sender; // User mints to themselves
+        
         if (to == address(0)) revert InvalidAddress();
         if (_walletToTokenId[to] != 0) revert WalletAlreadyHasNationalId();
         if (_metadataHashExists[metadataHash]) revert DuplicateMetadata();

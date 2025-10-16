@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useWallet } from "@/hooks/useWallet";
+import { useUserNFTs, type NFTDocument } from "@/hooks/useUserNFTs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,100 +33,25 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 
-interface NFTDocument {
-  id: string;
-  tokenId: string;
-  title: string;
-  type: "Land Title" | "National ID";
-  mintedDate: string;
-  contractAddress: string;
-  ownerAddress: string;
-  imageUrl?: string;
-  metadataUrl?: string;
-  verified: boolean;
-  blockchainExplorerUrl: string;
-}
-
 export default function NFTsPage() {
+  const router = useRouter();
   const { address } = useWallet();
-  const [nfts, setNfts] = useState<NFTDocument[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { nfts, isLoading, refetch } = useUserNFTs();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedNFT, setSelectedNFT] = useState<NFTDocument | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  // Fetch NFTs from blockchain
-  const fetchNFTs = async () => {
-    setIsLoading(true);
+  // Refresh NFTs
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
     try {
-      // TODO: Replace with actual blockchain API call
-      // Mock data for now
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const mockNFTs: NFTDocument[] = [
-        {
-          id: "1",
-          tokenId: "1298",
-          title: "Land Title #1298",
-          type: "Land Title",
-          mintedDate: "2025-10-14T10:30:00Z",
-          contractAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-          ownerAddress: address || "0x0000000000000000000000000000000000000000",
-          imageUrl:
-            "https://via.placeholder.com/300x200/1a1a1a/3ECF8E?text=Land+Title",
-          verified: true,
-          blockchainExplorerUrl: `https://etherscan.io/nft/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb/1298`,
-        },
-        {
-          id: "2",
-          tokenId: "0x5A7B",
-          title: "National ID Verification",
-          type: "National ID",
-          mintedDate: "2025-10-12T14:20:00Z",
-          contractAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-          ownerAddress: address || "0x0000000000000000000000000000000000000000",
-          imageUrl:
-            "https://via.placeholder.com/300x200/1a1a1a/3ECF8E?text=National+ID",
-          verified: true,
-          blockchainExplorerUrl: `https://etherscan.io/nft/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb/23163`,
-        },
-        {
-          id: "3",
-          tokenId: "2405",
-          title: "Land Title #2405",
-          type: "Land Title",
-          mintedDate: "2025-10-10T09:15:00Z",
-          contractAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-          ownerAddress: address || "0x0000000000000000000000000000000000000000",
-          imageUrl:
-            "https://via.placeholder.com/300x200/1a1a1a/3ECF8E?text=Property+Deed",
-          verified: true,
-          blockchainExplorerUrl: `https://etherscan.io/nft/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb/2405`,
-        },
-      ];
-
-      setNfts(mockNFTs);
+      await refetch();
+      toast.success("NFT list refreshed");
     } catch (error) {
-      console.error("Error fetching NFTs:", error);
-      toast.error("Failed to fetch NFT documents");
+      toast.error("Failed to refresh NFTs");
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    if (address) {
-      fetchNFTs();
-    } else {
-      setIsLoading(false);
-    }
-  }, [address]);
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchNFTs();
-    toast.success("Refreshing NFT documents...");
   };
 
   const handleCopyTokenId = (tokenId: string) => {
@@ -133,8 +60,8 @@ export default function NFTsPage() {
   };
 
   const handleViewDetails = (nft: NFTDocument) => {
-    setSelectedNFT(nft);
-    setIsDetailsOpen(true);
+    const type = nft.type === "National ID" ? "national-id" : "land-title";
+    router.push(`/nfts/${nft.tokenId}?type=${type}`);
   };
 
   const formatDate = (dateString: string) => {
@@ -249,17 +176,9 @@ export default function NFTsPage() {
                 <Card className="bg-surface-75 rounded-xl overflow-hidden group hover:shadow-xl hover:shadow-[#3ECF8E]/10 transition-all duration-300 border-border/40 hover:border-[#3ECF8E]/30">
                   {/* NFT Image */}
                   <div className="relative aspect-video bg-surface-200 overflow-hidden">
-                    {nft.imageUrl ? (
-                      <img
-                        src={nft.imageUrl}
-                        alt={nft.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-16 h-16 text-muted-foreground/30" />
-                      </div>
-                    )}
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-16 h-16 text-muted-foreground/30" />
+                    </div>
 
                     {/* Verified Badge Overlay */}
                     {nft.verified && (
@@ -316,22 +235,27 @@ export default function NFTsPage() {
                         View Details
                       </Button>
                       <div className="flex gap-2">
+                        {/* Only show transfer button for Land Title NFTs (National ID is soul-bound) */}
+                        {nft.type === "Land Title" && (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="flex-1 hover:bg-surface-300"
+                          >
+                            <Link href={`/nfts/${nft.tokenId}?type=land-title`}>
+                              <Send className="mr-2 h-3 w-3" />
+                              Transfer
+                            </Link>
+                          </Button>
+                        )}
                         <Button
                           asChild
                           variant="ghost"
                           size="sm"
-                          className="flex-1 hover:bg-surface-300"
-                        >
-                          <Link href={`/nfts/${nft.contractAddress}}/transfer`}>
-                            <Send className="mr-2 h-3 w-3" />
-                            Transfer
-                          </Link>
-                        </Button>
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="flex-1 hover:bg-surface-300"
+                          className={`${
+                            nft.type === "Land Title" ? "flex-1" : "w-full"
+                          } hover:bg-surface-300`}
                         >
                           <a
                             href={nft.blockchainExplorerUrl}
@@ -369,17 +293,9 @@ export default function NFTsPage() {
               <div className="mt-6 space-y-6">
                 {/* NFT Image */}
                 <div className="relative aspect-video bg-surface-200 rounded-lg overflow-hidden border border-border/40">
-                  {selectedNFT.imageUrl ? (
-                    <img
-                      src={selectedNFT.imageUrl}
-                      alt={selectedNFT.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="w-20 h-20 text-muted-foreground/30" />
-                    </div>
-                  )}
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="w-20 h-20 text-muted-foreground/30" />
+                  </div>
                 </div>
 
                 {/* Verification Status */}
@@ -476,6 +392,114 @@ export default function NFTsPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Decrypted Metadata Section - Only shown if owner */}
+                  {selectedNFT.decryptedMetadata && (
+                    <div className="space-y-4 pt-4 border-t border-border/40">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-[#3ECF8E]" />
+                        Document Uploads
+                      </h3>
+
+                      {/* Display decrypted fields */}
+                      {selectedNFT.decryptedMetadata.decryptedFields && (
+                        <div className="space-y-3 bg-surface-200/50 p-4 rounded-lg border border-border/40">
+                          {Object.entries(
+                            selectedNFT.decryptedMetadata.decryptedFields
+                          ).map(([key, value]) => (
+                            <div key={key} className="space-y-1">
+                              <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                                {key.replace(/([A-Z])/g, " $1").trim()}
+                              </label>
+                              <div className="text-sm font-medium">
+                                {String(value || "N/A")}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Display decrypted files/images */}
+                      {selectedNFT.decryptedMetadata.decryptedFiles &&
+                        selectedNFT.decryptedMetadata.decryptedFiles.length >
+                          0 && (
+                          <div className="space-y-4">
+                            {selectedNFT.decryptedMetadata.decryptedFiles.map(
+                              (file: any, index: number) => {
+                                const isImage =
+                                  file.mime?.startsWith("image/") ||
+                                  file.filename?.match(
+                                    /\.(jpg|jpeg|png|gif|webp)$/i
+                                  );
+
+                                return (
+                                  <div key={index} className="space-y-2">
+                                    <label className="text-sm font-medium text-muted-foreground">
+                                      {file.filename ||
+                                        file.label ||
+                                        `Document ${index + 1}`}
+                                    </label>
+                                    <div className="bg-surface-200/50 rounded-lg border border-border/40 overflow-hidden">
+                                      {file.decryptedUrl && isImage ? (
+                                        // Display image inline
+                                        <img
+                                          src={file.decryptedUrl}
+                                          alt={
+                                            file.filename ||
+                                            `Document ${index + 1}`
+                                          }
+                                          className="w-full h-auto max-h-[400px] object-contain"
+                                        />
+                                      ) : file.decryptedUrl ? (
+                                        // Display as file download link
+                                        <div className="p-4 flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <FileText className="w-5 h-5 text-muted-foreground" />
+                                            <span className="text-sm">
+                                              {file.filename ||
+                                                `Document ${index + 1}`}
+                                            </span>
+                                          </div>
+                                          <Button
+                                            asChild
+                                            variant="outline"
+                                            size="sm"
+                                          >
+                                            <a
+                                              href={file.decryptedUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              download
+                                            >
+                                              <Eye className="mr-2 w-4 h-4" />
+                                              View
+                                            </a>
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <div className="p-4 text-sm text-muted-foreground">
+                                          Decrypting...
+                                        </div>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Accepted formats: JPG, PNG (Max 5MB)
+                                    </p>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
+                        )}
+
+                      {!selectedNFT.decryptedMetadata.decryptedFields &&
+                        !selectedNFT.decryptedMetadata.decryptedFiles && (
+                          <p className="text-sm text-muted-foreground">
+                            Decrypting metadata...
+                          </p>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}

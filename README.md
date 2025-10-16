@@ -9,11 +9,14 @@ VeriBase (base-own) is a demo mini-app that enables secure verification of land 
 
 ## Key features
 
-- Wallet connect (MetaMask, Coinbase) via wagmi
-- Smart contracts for National ID and Land Ownership (deployed to Base Sepolia testnet)
-- Server-side utilities for minting and admin actions (requires admin private key)
-- Frontend hooks and components for reading token ownership and contract data
-- Deployment scripts (viem-based scripts in `blockchain/scripts`) to deploy contracts and copy ABIs to client & server
+- **Wallet Connect**: MetaMask and Coinbase wallet integration via wagmi
+- **Smart Contracts**: National ID and Land Ownership NFTs deployed to Base Sepolia testnet
+- **Admin Approval Flow**: Backend routes for admins to approve/reject verification requests
+- **Real-Time Statistics**: Combined database and blockchain stats on user and admin dashboards
+- **On-Chain Verification**: Read NFT ownership directly from Base Sepolia blockchain
+- **Server-Side Minting**: Admin-controlled minting with private key security
+- **Frontend Components**: React hooks and UI components for wallet connection and contract interaction
+- **Deployment Scripts**: viem-based scripts for contract deployment and ABI management
 
 ## Deployed contracts (Base Sepolia)
 
@@ -33,22 +36,63 @@ Deployment artifacts and tx hashes are stored under `blockchain/deployments/base
 
 ## Quick setup (local)
 
-1. Clone the repo
+1. **Clone the repo**
+
+   ```bash
    git clone <your-repo-url>
-2. Install dependencies
-   - client: cd client && npm install
-   - server: cd server && npm install
-   - blockchain: cd blockchain && npm install
-3. Create `.env` files
-   - Example vars:
-     - ADMIN_PRIVATE_KEY=...
-     - BASE_SEPOLIA_RPC_URL=...
-     - NFT_STORAGE_KEY=...
-     - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=...
-4. Deploy contracts (optional)
-   - Use the deployment script in `blockchain/scripts/deploy.ts` (requires private key and RPC URL). It will write `blockchain/deployments/baseSepolia.json` and copy ABIs to client & server.
-5. Run the app
-   - Start server and client as documented in their respective READMEs (or use `npm run dev` in each folder).
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   cd client && npm install
+   cd ../server && npm install
+   cd ../blockchain && npm install
+   ```
+
+3. **Create `.env` files**
+
+   **Server** (`server/.env`):
+
+   ```env
+   MONGO_URI=mongodb+srv://...
+   ADMIN_PRIVATE_KEY=0x...
+   BLOCKCHAIN_RPC_URL=https://sepolia.base.org
+   NATIONAL_ID_NFT_ADDRESS=0x57c236c2097c49c6f3c998b2fcf07f67596dc5f4
+   LAND_OWNERSHIP_NFT_ADDRESS=0x7d59c36de7c8825b55c73038fa6bcfd52f903c7a
+   PINATA_API_KEY=...
+   PINATA_API_SECRET=...
+   PORT=6969
+   ```
+
+   **Client** (`client/.env`):
+
+   ```env
+   NEXT_PUBLIC_BE_URL=http://localhost:6969
+   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=... (optional)
+   ```
+
+4. **Run the app**
+
+   ```bash
+   # Terminal 1 - Backend
+   cd server && npm run dev
+
+   # Terminal 2 - Frontend
+   cd client && npm run dev
+   ```
+
+5. **Access the app**
+   - User Dashboard: http://localhost:3000/home
+   - Admin Dashboard: http://localhost:3000/admin
+   - Landing Page: http://localhost:3000
+
+## Documentation
+
+- **[ADMIN-APPROVAL-FLOW.md](./ADMIN-APPROVAL-FLOW.md)** - Complete admin approval workflow
+- **[STATS-INTEGRATION.md](./STATS-INTEGRATION.md)** - Real-time statistics implementation
+- **[STATS-ARCHITECTURE.md](./STATS-ARCHITECTURE.md)** - Data flow diagrams
+- **[STATS-QUICK-REFERENCE.md](./STATS-QUICK-REFERENCE.md)** - API endpoints quick reference
 
 ## Testing
 

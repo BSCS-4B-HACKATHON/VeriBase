@@ -25,6 +25,16 @@ export default function ConnectWallet() {
   const { disconnect } = useDisconnect();
   const [copied, setCopied] = useState(false);
 
+  const adminWallets = process.env.NEXT_PUBLIC_ADMIN_WALLETS
+    ? process.env.NEXT_PUBLIC_ADMIN_WALLETS.split(",").map((addr) =>
+        addr.toLowerCase()
+      )
+    : [];
+
+  const isAdmin = address
+    ? adminWallets.includes(address.toLowerCase())
+    : false;
+
   const handleConnect = (connectorId: string) => {
     const connector = connectors.find((c) => c.id === connectorId);
     if (connector) {
@@ -141,6 +151,18 @@ export default function ConnectWallet() {
                 Dashboard
               </Link>
             </DropdownMenuItem>
+
+            {isAdmin && (
+              <DropdownMenuItem className="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors">
+                <IconDashboard className="w-4 h-4 text-white/60 group-hover:text-[#3ECF8E] transition-colors" />
+                <Link
+                  href="/admin"
+                  className="text-sm text-white/80 group-hover:text-white transition-colors"
+                >
+                  Admin
+                </Link>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator className="bg-white/10 my-2" />
 

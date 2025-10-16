@@ -24,10 +24,13 @@ import {
   MapPin,
   Image as ImageIcon,
   AlertTriangle,
+  CreditCard,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardContent,
@@ -65,11 +68,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockRequests } from "@/lib/mock-data";
+import {
+  fetchAdminRequests,
+  fetchAdminRequestById,
+  approveRequest,
+  rejectRequest,
+  type AdminRequest,
+  type DetailedAdminRequest,
+} from "@/lib/admin-api";
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
+import { findFileUrl } from "@/lib/helpers";
 
 type FilterTab = "all" | "pending" | "verified" | "rejected";
 
@@ -142,20 +153,500 @@ function RequestDetailsModal({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [detailedRequest, setDetailedRequest] =
+    useState<DetailedAdminRequest | null>(null);
+
+  useEffect(() => {
+    if (isOpen && request) {
+      fetchDetailedRequest();
+    }
+  }, [isOpen, request]);
+
+  const fetchDetailedRequest = async () => {
+    if (!request) return;
+
+    setIsLoading(true);
+    try {
+      console.log("Fetching detailed request for ID:", request.id);
+      console.log("Full request object:", request);
+      const data = await fetchAdminRequestById(request.id);
+      setDetailedRequest(data);
+    } catch (error) {
+      console.error("Failed to fetch detailed request:", error);
+      console.error("Request ID that failed:", request.id);
+      toast.error("Failed to load request details");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!request) return null;
 
-  const statusHistory = request.statusHistory || [
-    {
-      status: "Submitted",
-      timestamp: request.createdAt,
-      by: "User",
-    },
-    {
-      status: request.status,
-      timestamp: new Date().toISOString(),
-      by: "Admin",
-    },
-  ];
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="space-y-6">
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardContent className="p-6">
+              <Skeleton className="h-20 w-full mb-4" />
+              <Skeleton className="h-16 w-full mb-2" />
+              <Skeleton className="h-16 w-full" />
+            </CardContent>
+          </Card>
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardContent className="p-6">
+              <Skeleton className="h-40 w-full" />
+            </CardContent>
+          </Card>
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardContent className="p-6">
+              <Skeleton className="h-60 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (!detailedRequest) {
+      return (
+        <div className="py-8 text-center text-muted-foreground">
+          Failed to load request details
+        </div>
+      );
+    }
+
+    const requestType = detailedRequest.requestType
+      ?.replace(/_/g, "-")
+      .toLowerCase();
+    const isNationalId =
+      requestType === "national-id" || requestType === "national_id";
+
+    // Extract image URLs from files array using the helper function
+    const files = Array.isArray(detailedRequest.files)
+      ? detailedRequest.files
+      : [];
+    const frontPicture = isNationalId ? findFileUrl(files, ["front_id"]) : null;
+    const backPicture = isNationalId ? findFileUrl(files, ["back_id"]) : null;
+    const selfieWithId = isNationalId
+      ? findFileUrl(files, ["selfie_with_id"])
+      : null;
+    const deedUpload = !isNationalId ? findFileUrl(files, ["land_deed"]) : null;
+
+    return (
+      <div className="space-y-6">
+        {/* User Info Section */}
+        <Card className="bg-foreground/5 rounded-xl border-white/10">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <User className="w-5 h-5 text-[#3ECF8E]" />
+              User Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Name</p>
+                <p className="text-sm font-medium">
+                  {isNationalId
+                    ? `${detailedRequest.nationalIdData?.firstName || ""} ${
+                        detailedRequest.nationalIdData?.lastName || ""
+                      }`
+                    : `${detailedRequest.landTitleData?.firstName || ""} ${
+                        detailedRequest.landTitleData?.lastName || ""
+                      }`}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground mb-1">
+                  Wallet Address
+                </p>
+                <code className="text-sm font-mono bg-background/50 px-2 py-1 rounded break-all">
+                  {detailedRequest.requesterWallet}
+                </code>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Document Details Section - National ID */}
+        {isNationalId && detailedRequest.nationalIdData && (
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-[#3ECF8E]" />
+                National ID Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    First Name
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.nationalIdData.firstName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Last Name
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.nationalIdData.lastName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    ID Number
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.nationalIdData.idNumber}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Issue Date
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.nationalIdData.issueDate}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Expiry Date
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.nationalIdData.expiryDate}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Document Type
+                  </p>
+                  <Badge variant="outline" className="bg-background/50">
+                    National ID
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Current Status
+                  </p>
+                  {getStatusBadge(detailedRequest.status)}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Submitted On
+                  </p>
+                  <p className="text-sm">
+                    {format(
+                      new Date(detailedRequest.createdAt),
+                      "MMM dd, yyyy HH:mm"
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Document Details Section - Land Title */}
+        {!isNationalId && detailedRequest.landTitleData && (
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#3ECF8E]" />
+                Land Title Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    First Name
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.firstName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Last Name
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.lastName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Title Number
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.titleNumber}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Lot Area (sqm)
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.lotArea}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Latitude</p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.latitude}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Longitude
+                  </p>
+                  <p className="text-sm font-medium">
+                    {detailedRequest.landTitleData.longitude}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Document Type
+                  </p>
+                  <Badge variant="outline" className="bg-background/50">
+                    Land Title
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Current Status
+                  </p>
+                  {getStatusBadge(detailedRequest.status)}
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Submitted On
+                  </p>
+                  <p className="text-sm">
+                    {format(
+                      new Date(detailedRequest.createdAt),
+                      "MMM dd, yyyy HH:mm"
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Uploaded Images Section */}
+        <Card className="bg-foreground/5 rounded-xl border-white/10">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-[#3ECF8E]" />
+              Uploaded Documents
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isNationalId && detailedRequest.nationalIdData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Front Picture */}
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Front Picture</p>
+                  {frontPicture ? (
+                    <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
+                      <img
+                        src={frontPicture}
+                        alt="Front ID"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='18' fill='%23999'%3EFront ID%3C/text%3E%3C/svg%3E";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Back Picture */}
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Back Picture</p>
+                  {backPicture ? (
+                    <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
+                      <img
+                        src={backPicture}
+                        alt="Back ID"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='18' fill='%23999'%3EBack ID%3C/text%3E%3C/svg%3E";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Selfie */}
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-xs text-muted-foreground">
+                    Selfie with ID
+                  </p>
+                  {selfieWithId ? (
+                    <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
+                      <img
+                        src={selfieWithId}
+                        alt="Selfie with ID"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='18' fill='%23999'%3ESelfie%3C/text%3E%3C/svg%3E";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                      <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : detailedRequest.landTitleData ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Land Title Deed</p>
+                {deedUpload ? (
+                  <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
+                    <img
+                      src={deedUpload}
+                      alt="Land Title Deed"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='18' fill='%23999'%3ELand Title Deed%3C/text%3E%3C/svg%3E";
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Status History Timeline */}
+        <Card className="bg-foreground/5 rounded-xl border-white/10">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#3ECF8E]" />
+              Request Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="relative flex flex-col items-center">
+                  <div className="w-8 h-8 rounded-full bg-[#3ECF8E]/20 flex items-center justify-center shrink-0 border-2 border-[#3ECF8E]">
+                    <div className="w-2 h-2 rounded-full bg-[#3ECF8E]" />
+                  </div>
+                  <div className="w-px flex-1 bg-border/40 mt-2 min-h-[20px]" />
+                </div>
+                <div className="flex-1 pb-4">
+                  <p className="text-sm font-medium">Submitted</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(
+                      new Date(detailedRequest.createdAt),
+                      "MMM dd, yyyy HH:mm"
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${
+                      detailedRequest.status === "pending"
+                        ? "bg-yellow-500/20 border-yellow-500 animate-pulse"
+                        : "bg-[#3ECF8E]/20 border-[#3ECF8E]"
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        detailedRequest.status === "pending"
+                          ? "bg-yellow-500"
+                          : "bg-[#3ECF8E]"
+                      }`}
+                    />
+                  </div>
+                  {detailedRequest.status !== "pending" && (
+                    <div className="w-px flex-1 bg-border/40 mt-2 min-h-[20px]" />
+                  )}
+                </div>
+                <div className="flex-1 pb-4">
+                  <p className="text-sm font-medium">
+                    {detailedRequest.status === "pending"
+                      ? "Pending Review"
+                      : "Reviewed"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {detailedRequest.status === "pending"
+                      ? "Waiting for admin verification"
+                      : format(
+                          new Date(detailedRequest.updatedAt),
+                          "MMM dd, yyyy HH:mm"
+                        )}
+                  </p>
+                </div>
+              </div>
+
+              {detailedRequest.status !== "pending" && (
+                <div className="flex gap-3">
+                  <div className="relative flex flex-col items-center">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${
+                        detailedRequest.status === "verified"
+                          ? "bg-green-500/20 border-green-500"
+                          : "bg-red-500/20 border-red-500"
+                      }`}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          detailedRequest.status === "verified"
+                            ? "bg-green-500"
+                            : "bg-red-500"
+                        }`}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1 pb-4">
+                    <p className="text-sm font-medium">
+                      {detailedRequest.status === "verified"
+                        ? "Verified"
+                        : "Rejected"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(
+                        new Date(detailedRequest.updatedAt),
+                        "MMM dd, yyyy HH:mm"
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -169,165 +660,10 @@ function RequestDetailsModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* User Info Section */}
-          <Card className="bg-foreground/5 rounded-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <User className="w-5 h-5 text-[#3ECF8E]" />
-                User Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Name</p>
-                  <p className="text-sm font-medium">{request.userName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Email</p>
-                  <p className="text-sm font-medium">
-                    {request.email || "Not provided"}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Wallet Address
-                  </p>
-                  <code className="text-sm font-mono bg-background/50 px-2 py-1 rounded">
-                    {request.walletAddress}
-                  </code>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Document Details Section */}
-          <Card className="bg-foreground/5 rounded-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="w-5 h-5 text-[#3ECF8E]" />
-                Document Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Document Type
-                  </p>
-                  <Badge variant="outline" className="bg-background/50">
-                    {request.documentType || request.assetType}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Current Status
-                  </p>
-                  {getStatusBadge(request.status)}
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Asset ID</p>
-                  <code className="text-sm font-mono">{request.assetId}</code>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Submitted On
-                  </p>
-                  <p className="text-sm">
-                    {format(new Date(request.createdAt), "MMM dd, yyyy HH:mm")}
-                  </p>
-                </div>
-                {request.issueDate && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Issue Date
-                    </p>
-                    <p className="text-sm">{request.issueDate}</p>
-                  </div>
-                )}
-                {request.expiryDate && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Expiry Date
-                    </p>
-                    <p className="text-sm">{request.expiryDate}</p>
-                  </div>
-                )}
-              </div>
-              {request.description && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Description
-                  </p>
-                  <p className="text-sm">{request.description}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Uploaded Images Section */}
-          <Card className="bg-foreground/5 rounded-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-[#3ECF8E]" />
-                Uploaded Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Front Side</p>
-                  <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Back Side</p>
-                  <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Status History Timeline */}
-          <Card className="bg-foreground/5 rounded-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#3ECF8E]" />
-                Status History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {statusHistory.map((item, index) => (
-                  <div key={index} className="flex gap-3">
-                    <div className="relative flex flex-col items-center">
-                      <div className="w-8 h-8 rounded-full bg-[#3ECF8E]/20 flex items-center justify-center shrink-0 border-2 border-[#3ECF8E]">
-                        <div className="w-2 h-2 rounded-full bg-[#3ECF8E]" />
-                      </div>
-                      {index < statusHistory.length - 1 && (
-                        <div className="w-px flex-1 bg-border/40 mt-2 min-h-[20px]" />
-                      )}
-                    </div>
-                    <div className="flex-1 pb-4">
-                      <p className="text-sm font-medium">{item.status}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(item.timestamp), "MMM dd, yyyy HH:mm")}{" "}
-                        by {item.by}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {renderContent()}
 
         <DialogFooter className="gap-2">
-          {request.status === "pending" && (
+          {request.status === "pending" && !isLoading && detailedRequest && (
             <>
               <Button
                 variant="outline"
@@ -367,17 +703,55 @@ export default function AdminRequestsPage() {
     useState<ExtendedRequest | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Enhanced mock data with document types
+  // State for real data
+  const [requests, setRequests] = useState<AdminRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalRequests, setTotalRequests] = useState(0);
+
+  // Fetch real requests from API
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  const loadRequests = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetchAdminRequests({ limit: 100 });
+      console.log("Fetched requests from backend:", response.requests);
+      console.log("First request sample:", response.requests[0]);
+      setRequests(response.requests);
+      setTotalRequests(response.total);
+    } catch (error) {
+      console.error("Error loading requests:", error);
+      toast.error("Failed to load requests");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Convert AdminRequest to ExtendedRequest format for UI compatibility
   const enhancedRequests: ExtendedRequest[] = useMemo(
     () =>
-      mockRequests.map((req) => ({
-        ...req,
-        documentType: Math.random() > 0.5 ? "Land Title" : "National ID",
-        email: `${req.userName.toLowerCase().replace(/\s+/g, ".")}@example.com`,
-        issueDate: "Jan 15, 2020",
-        expiryDate: "Jan 15, 2030",
+      requests.map((req) => ({
+        id: req.requestId,
+        userId: req.requesterWallet,
+        userName: req.minimalPublicLabel || shortenAddress(req.requesterWallet),
+        assetType: "NFT" as const,
+        assetId: req.requestId,
+        walletAddress: req.requesterWallet,
+        description: `${
+          req.requestType === "national_id" ? "National ID" : "Land Ownership"
+        } verification request`,
+        status: req.status,
+        createdAt: req.createdAt,
+        updatedAt: req.updatedAt,
+        documentType:
+          req.requestType === "national_id" ? "National ID" : "Land Title",
+        email: undefined,
+        issueDate: undefined,
+        expiryDate: undefined,
       })),
-    []
+    [requests]
   );
 
   const filteredRequests = useMemo(() => {
@@ -436,10 +810,14 @@ export default function AdminRequestsPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsRefreshing(false);
-    toast.success("Data refreshed successfully");
+    try {
+      await loadRequests();
+      toast.success("Data refreshed successfully");
+    } catch (error) {
+      toast.error("Failed to refresh data");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleViewDetails = (request: ExtendedRequest) => {
@@ -447,16 +825,34 @@ export default function AdminRequestsPage() {
     setIsModalOpen(true);
   };
 
-  const handleApprove = (id: string) => {
-    toast.success(`Request ${id} approved successfully`);
-    setIsModalOpen(false);
-    // TODO: Implement actual approval logic
+  const handleApprove = async (id: string) => {
+    try {
+      const result = await approveRequest(id);
+      if (result.ok) {
+        toast.success(`Request ${id} approved successfully`);
+        setIsModalOpen(false);
+        await loadRequests(); // Reload data
+      } else {
+        toast.error(result.error || "Failed to approve request");
+      }
+    } catch (error) {
+      toast.error("Failed to approve request");
+    }
   };
 
-  const handleReject = (id: string) => {
-    toast.error(`Request ${id} rejected`);
-    setIsModalOpen(false);
-    // TODO: Implement actual rejection logic
+  const handleReject = async (id: string) => {
+    try {
+      const result = await rejectRequest(id, "Rejected by admin");
+      if (result.ok) {
+        toast.error(`Request ${id} rejected`);
+        setIsModalOpen(false);
+        await loadRequests(); // Reload data
+      } else {
+        toast.error(result.error || "Failed to reject request");
+      }
+    } catch (error) {
+      toast.error("Failed to reject request");
+    }
   };
 
   const handleExportCSV = () => {
@@ -671,7 +1067,19 @@ export default function AdminRequestsPage() {
                   </TableHeader>
                   <TableBody>
                     <AnimatePresence mode="wait">
-                      {paginatedRequests.length === 0 ? (
+                      {isLoading ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center py-12 text-muted-foreground"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <RefreshCw className="w-8 h-8 opacity-50 animate-spin" />
+                              <p>Loading requests...</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : paginatedRequests.length === 0 ? (
                         <TableRow>
                           <TableCell
                             colSpan={5}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { useUserNFTs, type NFTDocument } from "@/hooks/useUserNFTs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,28 +32,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { TransferNFTModal } from "@/components/transfer-nft-modal";
 
-interface NFTDocument {
-  id: string;
-  tokenId: string;
-  title: string;
-  type: "Land Title" | "National ID";
-  status: "approved" | "pending" | "rejected";
-  mintedDate: string;
-  contractAddress: string;
-  ownerAddress: string;
-  imageUrl?: string;
-  metadataUrl?: string;
-  verified: boolean;
-  blockchainExplorerUrl: string;
-  network: string;
-  transactionHash: string;
-  ipfsCid?: string;
-  documentHash?: string;
-  uploadDate: string;
-  verificationAuthority: string;
-  validationTimestamp: string;
-}
-
 interface TimelineEvent {
   title: string;
   date: string;
@@ -62,60 +41,48 @@ interface TimelineEvent {
 export default function NFTDocumentViewPage() {
   const params = useParams();
   const router = useRouter();
-  const contractAddress = params.address as string;
+  const searchParams = useSearchParams();
 
+  const tokenId = params.address as string;
+  const nftType = searchParams.get("type") as
+    | "national-id"
+    | "land-title"
+    | null;
+
+  const { nfts, isLoading: nftsLoading } = useUserNFTs();
   const [nft, setNft] = useState<NFTDocument | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   useEffect(() => {
-    // Fetch NFT details based on contract address
-    const fetchNFTDetails = async () => {
-      setIsLoading(true);
-      try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 800));
+    // Find the NFT from the loaded list by tokenId AND type
+    if (!nftsLoading && nfts.length > 0) {
+      const foundNFT = nfts.find((nftItem) => {
+        const matchesTokenId = nftItem.tokenId === tokenId;
 
-        // Mock data
-        const mockNFT: NFTDocument = {
-          id: "1",
-          tokenId: "1298",
-          title: "Land Title #1298",
-          type: "Land Title",
-          status: "approved",
-          mintedDate: "2025-10-14T10:30:00Z",
-          contractAddress:
-            contractAddress || "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-          ownerAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-          imageUrl:
-            "https://via.placeholder.com/800x600/1a1a1a/3ECF8E?text=Land+Title+Document",
-          verified: true,
-          blockchainExplorerUrl: `https://etherscan.io/nft/${contractAddress}/1298`,
-          network: "Ethereum Mainnet",
-          transactionHash:
-            "0x9f2e8a5b3c1d4f6a8e7b9c2d5e8f1a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1f",
-          ipfsCid: "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
-          documentHash:
-            "0x5f3e8a2b9c1d4f6a7e8b3c2d5e9f1a4b6c8d2e5f7a1b3c6d0e2f5a8b1c4d7e0f",
-          uploadDate: "2025-10-10T14:20:00Z",
-          verificationAuthority: "National Land Registry",
-          validationTimestamp: "2025-10-14T09:15:00Z",
-        };
+        // If type parameter is provided, also match by type
+        if (nftType) {
+          const nftTypeLower = nftItem.type.toLowerCase().replace(" ", "-");
+          const matchesType = nftTypeLower === nftType;
+          return matchesTokenId && matchesType;
+        }
 
-        setNft(mockNFT);
-      } catch (error) {
-        console.error("Error fetching NFT details:", error);
-        toast.error("Failed to load NFT details");
-      } finally {
-        setIsLoading(false);
+        // If no type specified, just match by tokenId (first match)
+        return matchesTokenId;
+      });
+
+      if (foundNFT) {
+        setNft(foundNFT);
+      } else {
+        toast.error("NFT not found");
+        router.push("/nfts");
       }
-    };
-
-    if (contractAddress) {
-      fetchNFTDetails();
+      setIsLoading(false);
+    } else if (!nftsLoading) {
+      setIsLoading(false);
     }
-  }, [contractAddress]);
+  }, [tokenId, nftType, nfts, nftsLoading, router]);
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -125,21 +92,17 @@ export default function NFTDocumentViewPage() {
   const handleCopyAllDetails = () => {
     if (!nft) return;
 
+    // TODO: Extend NFTDocument type with additional fields from metadata
     const details = `
 NFT Document Details
 ====================
 Title: ${nft.title}
 Type: ${nft.type}
-Status: ${nft.status}
 Token ID: ${nft.tokenId}
 Contract Address: ${nft.contractAddress}
 Owner Address: ${nft.ownerAddress}
-Network: ${nft.network}
 Minted Date: ${new Date(nft.mintedDate).toLocaleString()}
-Transaction Hash: ${nft.transactionHash}
-${nft.ipfsCid ? `IPFS CID: ${nft.ipfsCid}` : ""}
-Document Hash: ${nft.documentHash}
-Verification Authority: ${nft.verificationAuthority}
+Verified: ${nft.verified}
     `.trim();
 
     navigator.clipboard.writeText(details);
@@ -149,6 +112,7 @@ Verification Authority: ${nft.verificationAuthority}
   const handleDownloadMetadata = () => {
     if (!nft) return;
 
+    // TODO: Extended metadata from tokenURI when available
     const metadata = {
       name: nft.title,
       description: `Verified ${nft.type} document stored on-chain`,
@@ -156,17 +120,11 @@ Verification Authority: ${nft.verificationAuthority}
       tokenId: nft.tokenId,
       contractAddress: nft.contractAddress,
       ownerAddress: nft.ownerAddress,
-      network: nft.network,
       mintedDate: nft.mintedDate,
       verified: nft.verified,
       attributes: [
         { trait_type: "Document Type", value: nft.type },
-        { trait_type: "Status", value: nft.status },
-        {
-          trait_type: "Verification Authority",
-          value: nft.verificationAuthority,
-        },
-        { trait_type: "Network", value: nft.network },
+        { trait_type: "Verified", value: nft.verified ? "Yes" : "No" },
       ],
     };
 
@@ -196,15 +154,11 @@ Verification Authority: ${nft.verificationAuthority}
     return variants[status as keyof typeof variants] || variants.pending;
   };
 
+  // TODO: Get timeline from metadata or transaction history
   const timeline: TimelineEvent[] = [
     {
       title: "Request Submitted",
-      date: nft?.uploadDate || "",
-      status: "completed",
-    },
-    {
-      title: "Document Verified",
-      date: nft?.validationTimestamp || "",
+      date: nft?.mintedDate || "",
       status: "completed",
     },
     {
@@ -303,17 +257,11 @@ Verification Authority: ${nft.verificationAuthority}
             <Card className="bg-surface-75 rounded-xl overflow-hidden border-border/40 sticky top-6">
               <CardContent className="p-0">
                 <div className="relative aspect-[4/3] bg-surface-200">
-                  {nft.imageUrl ? (
-                    <img
-                      src={nft.imageUrl}
-                      alt={nft.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
+                  {
                     <div className="w-full h-full flex items-center justify-center">
                       <ImageIcon className="w-20 h-20 text-muted-foreground/30" />
                     </div>
-                  )}
+                  }
 
                   {/* Verified Badge Overlay */}
                   {nft.verified && (
@@ -494,15 +442,26 @@ Verification Authority: ${nft.verificationAuthority}
                     Download
                   </Button>
                 </div>
-                <Button
-                  onClick={() => setIsTransferModalOpen(true)}
-                  variant="ghost"
-                  size="lg"
-                  className="w-full mt-3 hover:bg-surface-300"
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Transfer
-                </Button>
+                {/* Only show transfer button for Land Title NFTs (National ID is soul-bound) */}
+                {nft.type === "Land Title" && (
+                  <Button
+                    onClick={() => setIsTransferModalOpen(true)}
+                    variant="ghost"
+                    size="lg"
+                    className="w-full mt-3 hover:bg-surface-300"
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    Transfer
+                  </Button>
+                )}
+                {nft.type === "National ID" && (
+                  <div className="mt-3 p-3 bg-surface-200/50 rounded-lg border border-border/40">
+                    <p className="text-xs text-muted-foreground text-center">
+                      <Shield className="inline w-3 h-3 mr-1" />
+                      National ID NFTs are soul-bound and cannot be transferred
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -577,15 +536,15 @@ Verification Authority: ${nft.verificationAuthority}
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">
-                  Transaction Hash
+                  NFT Contract Address
                 </label>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs font-mono bg-surface-200 px-3 py-2 rounded border border-border/40 overflow-x-auto">
-                    {shortenAddress(nft.transactionHash)}
+                    {nft.contractAddress}
                   </code>
                   <Button
                     onClick={() =>
-                      handleCopy(nft.transactionHash, "Transaction hash")
+                      handleCopy(nft.contractAddress, "Contract address")
                     }
                     variant="outline"
                     size="sm"
@@ -616,38 +575,87 @@ Verification Authority: ${nft.verificationAuthority}
                       </Button>
                     </div>
                   </div>
-                  <Separator className="bg-border/40" />
                 </>
               )}
-
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">
-                  Document Hash
-                </label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs font-mono bg-surface-200 px-3 py-2 rounded border border-border/40 overflow-x-auto">
-                    {shortenAddress(nft.documentHash!)}
-                  </code>
-                  <Button
-                    onClick={() =>
-                      handleCopy(nft.documentHash!, "Document hash")
-                    }
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Document Uploads Section - Only visible to owner */}
+        {nft.decryptedMetadata?.files &&
+          nft.decryptedMetadata.files.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <Card className="bg-surface-75 rounded-xl border-border/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FileText className="w-5 h-5 text-[#3ECF8E]" />
+                    Document Uploads
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Encrypted files stored securely on IPFS
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {nft.decryptedMetadata.files.map(
+                    (file: any, index: number) => {
+                      const isImage =
+                        file.mime?.startsWith("image/") ||
+                        file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+                      return (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {file.filename || `File ${index + 1}`}
+                            </span>
+                            {file.size && (
+                              <span className="text-xs text-muted-foreground">
+                                {(file.size / 1024).toFixed(2)} KB
+                              </span>
+                            )}
+                          </div>
+                          {isImage ? (
+                            <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
+                              <img
+                                src={file.decryptedUrl}
+                                alt={file.filename || `Image ${index + 1}`}
+                                className="w-full h-auto max-h-[400px] object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <a
+                              href={file.decryptedUrl}
+                              download={file.filename}
+                              className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border/40 bg-surface-200 hover:bg-surface-300 transition-colors"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="text-sm">View</span>
+                            </a>
+                          )}
+                          {index < nft.decryptedMetadata.files.length - 1 && (
+                            <Separator className="bg-border/40" />
+                          )}
+                        </div>
+                      );
+                    }
+                  )}
+                  <p className="text-xs text-muted-foreground mt-4">
+                    Accepted formats: JPG, PNG (Max 5MB)
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
         {/* Transaction Timeline */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
         >
           <Card className="bg-surface-75 rounded-xl border-border/40">
             <CardHeader>

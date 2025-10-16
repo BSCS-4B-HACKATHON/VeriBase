@@ -43,7 +43,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { mockRequests } from "@/lib/mock-data";
+import {
+  fetchAdminRequestById,
+  approveRequest,
+  rejectRequest,
+  type DetailedAdminRequest,
+} from "@/lib/admin-api";
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
 
@@ -62,6 +67,24 @@ interface ExtendedRequest extends VerificationRequest {
   adminRemarks?: string;
   lastUpdatedBy?: string;
   lastUpdatedAt?: string;
+  // Add decrypted data from API
+  nationalIdData?: {
+    firstName: string | null;
+    middleName: string | null;
+    lastName: string | null;
+    idNumber: string | null;
+    issueDate: string | null;
+    expiryDate: string | null;
+  };
+  landTitleData?: {
+    firstName: string | null;
+    middleName: string | null;
+    lastName: string | null;
+    latitude: string | null;
+    longitude: string | null;
+    titleNumber: string | null;
+    lotArea: string | null;
+  };
   statusHistory?: Array<{
     status: string;
     timestamp: string;
@@ -127,99 +150,144 @@ export default function RequestDetailsPage() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   useEffect(() => {
-    // Simulate API call
+    // Fetch real request from API with decrypted data
     const fetchRequest = async () => {
       setIsLoading(true);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        const data = await fetchAdminRequestById(requestId);
 
-      const foundRequest = mockRequests.find((r) => r.id === requestId);
-      if (foundRequest) {
-        const enhanced: ExtendedRequest = {
-          ...foundRequest,
-          documentType: Math.random() > 0.5 ? "Land Title" : "National ID",
-          email: `${foundRequest.userName
-            .toLowerCase()
-            .replace(/\s+/g, ".")}@example.com`,
-          idNumber: `ID-${Math.floor(Math.random() * 1000000)
-            .toString()
-            .padStart(6, "0")}`,
-          issueDate: "2020-01-15",
-          expiryDate: "2030-01-15",
-          nftHash: `0x${Math.random().toString(16).substring(2, 34)}...`,
-          blockchainTxLink: `https://etherscan.io/tx/0x${Math.random()
-            .toString(16)
-            .substring(2)}`,
-          frontImage: "/placeholder-doc.jpg",
-          backImage: "/placeholder-doc.jpg",
-          accountCreatedOn: "2023-06-10T08:30:00Z",
-          previousRequestsCount: Math.floor(Math.random() * 5),
+        if (!data) {
+          toast.error("Request not found");
+          router.push("/admin/requests");
+          return;
+        }
+
+        // Map API response to UI format (same as user request page)
+        const rawType = data.requestType;
+        const canonicalType: "national-id" | "land-title" =
+          rawType === "national_id" ? "national-id" : "land-title";
+
+        const mapped: ExtendedRequest = {
+          id: data.requestId,
+          userId: data.requesterWallet,
+          userName:
+            data.minimalPublicLabel || shortenAddress(data.requesterWallet),
+          assetType: "NFT",
+          assetId: data.requestId,
+          walletAddress: data.requesterWallet,
+          description: `${
+            canonicalType === "national-id" ? "National ID" : "Land Ownership"
+          } verification request`,
+          status: data.status,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          documentType:
+            canonicalType === "national-id" ? "National ID" : "Land Title",
+          // Use decrypted data from API
+          email: undefined,
+          idNumber: data.nationalIdData?.idNumber || undefined,
+          issueDate: data.nationalIdData?.issueDate || undefined,
+          expiryDate: data.nationalIdData?.expiryDate || undefined,
+          nftHash: data.metadataHash || undefined,
+          blockchainTxLink: undefined,
+          // Get decrypted file URLs from API response
+          frontImage: data.files?.find(
+            (f) =>
+              f.tag?.toLowerCase().includes("front") ||
+              f.filename?.toLowerCase().includes("front")
+          )?.decryptedUrl,
+          backImage: data.files?.find(
+            (f) =>
+              f.tag?.toLowerCase().includes("back") ||
+              f.filename?.toLowerCase().includes("back")
+          )?.decryptedUrl,
+          accountCreatedOn: data.createdAt,
+          previousRequestsCount: 0,
           adminRemarks: "",
-          lastUpdatedBy: "Admin John Doe",
-          lastUpdatedAt: new Date().toISOString(),
+          lastUpdatedBy: "Admin",
+          lastUpdatedAt: data.updatedAt,
+          // Store full decrypted data
+          nationalIdData: data.nationalIdData,
+          landTitleData: data.landTitleData,
           statusHistory: [
             {
               status: "Request Submitted",
-              timestamp: foundRequest.createdAt,
-              by: foundRequest.userName,
+              timestamp: data.createdAt,
+              by: data.minimalPublicLabel || "User",
               icon: Send,
               remarks: "Initial submission received",
             },
-            {
-              status: "Under Review",
-              timestamp: new Date(
-                new Date(foundRequest.createdAt).getTime() + 3600000
-              ).toISOString(),
-              by: "Admin Sarah",
-              icon: Search,
-              remarks: "Documents verification in progress",
-            },
-            ...(foundRequest.status === "verified"
+            ...(data.status === "verified"
               ? [
                   {
                     status: "Approved",
-                    timestamp: new Date(
-                      new Date(foundRequest.createdAt).getTime() + 7200000
-                    ).toISOString(),
-                    by: "Admin John Doe",
+                    timestamp: data.updatedAt,
+                    by: "Admin",
                     icon: CheckCircle2,
-                    remarks: "All documents verified successfully",
+                    remarks: "Verification approved",
                   },
                 ]
-              : foundRequest.status === "rejected"
+              : data.status === "rejected"
               ? [
                   {
                     status: "Rejected",
-                    timestamp: new Date(
-                      new Date(foundRequest.createdAt).getTime() + 7200000
-                    ).toISOString(),
-                    by: "Admin John Doe",
+                    timestamp: data.updatedAt,
+                    by: "Admin",
                     icon: XCircle,
-                    remarks: "Document quality insufficient",
+                    remarks: "Verification rejected",
                   },
                 ]
               : []),
           ],
         };
-        setRequest(enhanced);
+
+        setRequest(mapped);
+      } catch (error) {
+        console.error("Error fetching request:", error);
+        toast.error("Failed to load request details");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     fetchRequest();
-  }, [requestId]);
+  }, [requestId, router]);
 
-  const handleApprove = () => {
-    toast.success("Request approved successfully");
-    // TODO: Implement actual approval logic
+  const handleApprove = async () => {
+    if (!request) return;
+
+    try {
+      const result = await approveRequest(request.id);
+      if (result.ok) {
+        toast.success("Request approved successfully");
+        router.push("/admin/requests");
+      } else {
+        toast.error(result.error || "Failed to approve request");
+      }
+    } catch (error) {
+      toast.error("Failed to approve request");
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
+    if (!request) return;
+
     if (!adminRemarks.trim()) {
       toast.error("Please provide a reason for rejection");
       return;
     }
-    toast.error(`Request rejected: ${adminRemarks}`);
-    // TODO: Implement actual rejection logic
+
+    try {
+      const result = await rejectRequest(request.id, adminRemarks);
+      if (result.ok) {
+        toast.error(`Request rejected: ${adminRemarks}`);
+        router.push("/admin/requests");
+      } else {
+        toast.error(result.error || "Failed to reject request");
+      }
+    } catch (error) {
+      toast.error("Failed to reject request");
+    }
   };
 
   const handleRequestResubmission = () => {
@@ -392,88 +460,206 @@ export default function RequestDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="divide-y divide-white/10 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 first:pt-0">
-                      <div>
+                    {/* National ID Fields */}
+                    {request.documentType === "National ID" &&
+                      request.nationalIdData && (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 first:pt-0">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  First Name
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {request.nationalIdData.firstName || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Last Name
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {request.nationalIdData.lastName || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Hash className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  ID Number
+                                </p>
+                              </div>
+                              <code className="text-sm font-mono">
+                                {request.nationalIdData.idNumber || "N/A"}
+                              </code>
+                            </div>
+                            {request.nationalIdData.middleName && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <User className="w-4 h-4 text-[#3ECF8E]" />
+                                  <p className="text-xs text-muted-foreground font-medium">
+                                    Middle Name
+                                  </p>
+                                </div>
+                                <p className="text-sm font-semibold">
+                                  {request.nationalIdData.middleName}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {(request.nationalIdData.issueDate ||
+                            request.nationalIdData.expiryDate) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                              {request.nationalIdData.issueDate && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Calendar className="w-4 h-4 text-[#3ECF8E]" />
+                                    <p className="text-xs text-muted-foreground font-medium">
+                                      Issue Date
+                                    </p>
+                                  </div>
+                                  <p className="text-sm">
+                                    {request.nationalIdData.issueDate}
+                                  </p>
+                                </div>
+                              )}
+                              {request.nationalIdData.expiryDate && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Calendar className="w-4 h-4 text-red-400" />
+                                    <p className="text-xs text-muted-foreground font-medium">
+                                      Expiry Date
+                                    </p>
+                                  </div>
+                                  <p className="text-sm">
+                                    {request.nationalIdData.expiryDate}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                    {/* Land Title Fields */}
+                    {request.documentType === "Land Title" &&
+                      request.landTitleData && (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 first:pt-0">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  First Name
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {request.landTitleData.firstName || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Last Name
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold">
+                                {request.landTitleData.lastName || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Hash className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Title Number
+                                </p>
+                              </div>
+                              <code className="text-sm font-mono">
+                                {request.landTitleData.titleNumber || "N/A"}
+                              </code>
+                            </div>
+                            {request.landTitleData.middleName && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <User className="w-4 h-4 text-[#3ECF8E]" />
+                                  <p className="text-xs text-muted-foreground font-medium">
+                                    Middle Name
+                                  </p>
+                                </div>
+                                <p className="text-sm font-semibold">
+                                  {request.landTitleData.middleName}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <MapPin className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Latitude
+                                </p>
+                              </div>
+                              <p className="text-sm">
+                                {request.landTitleData.latitude || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <MapPin className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Longitude
+                                </p>
+                              </div>
+                              <p className="text-sm">
+                                {request.landTitleData.longitude || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {request.landTitleData.lotArea && (
+                            <div className="pt-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="w-4 h-4 text-[#3ECF8E]" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Lot Area (sqm)
+                                </p>
+                              </div>
+                              <p className="text-sm">
+                                {request.landTitleData.lotArea}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                    {request.nftHash && (
+                      <div className="pt-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <FileText className="w-4 h-4 text-[#3ECF8E]" />
+                          <Shield className="w-4 h-4 text-[#3ECF8E]" />
                           <p className="text-xs text-muted-foreground font-medium">
-                            Document Type
+                            Metadata Hash
                           </p>
                         </div>
-                        <p className="text-sm font-semibold">
-                          {request.documentType}
-                        </p>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Hash className="w-4 h-4 text-[#3ECF8E]" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            ID Number
-                          </p>
-                        </div>
-                        <code className="text-sm font-mono">
-                          {request.idNumber}
+                        <code className="text-sm font-mono bg-background/50 px-3 py-2 rounded-lg block break-all">
+                          {request.nftHash}
                         </code>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-[#3ECF8E]" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Issue Date
-                          </p>
-                        </div>
-                        <p className="text-sm">
-                          {format(new Date(request.issueDate!), "MMM dd, yyyy")}
-                        </p>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-4 h-4 text-red-400" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Expiry Date
-                          </p>
-                        </div>
-                        <p className="text-sm">
-                          {format(
-                            new Date(request.expiryDate!),
-                            "MMM dd, yyyy"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Shield className="w-4 h-4 text-[#3ECF8E]" />
-                        <p className="text-xs text-muted-foreground font-medium">
-                          NFT Hash / Verification ID
-                        </p>
-                      </div>
-                      <code className="text-sm font-mono bg-background/50 px-3 py-2 rounded-lg block break-all">
-                        {request.nftHash}
-                      </code>
-                    </div>
-
-                    <div className="pt-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <LinkIcon className="w-4 h-4 text-[#3ECF8E]" />
-                        <p className="text-xs text-muted-foreground font-medium">
-                          Blockchain Transaction
-                        </p>
-                      </div>
-                      <a
-                        href={request.blockchainTxLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-[#3ECF8E] hover:underline flex items-center gap-2 w-fit"
-                      >
-                        View on Etherscan
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
+                    )}
 
                     {request.description && (
                       <div className="pt-4">
@@ -509,44 +695,75 @@ export default function RequestDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ImageIcon className="w-4 h-4 text-[#3ECF8E]" />
-                        <p className="text-xs text-muted-foreground font-medium">
-                          Front Image
-                        </p>
-                      </div>
-                      <div
-                        onClick={() => openImagePreview(request.frontImage!)}
-                        className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
-                      >
-                        <div className="text-center">
-                          <ImageIcon className="w-12 h-12 text-muted-foreground group-hover:text-[#3ECF8E] transition-colors mx-auto mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            Click to preview
+                    {/* Front Image */}
+                    {request.frontImage && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <ImageIcon className="w-4 h-4 text-[#3ECF8E]" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Front Image
                           </p>
                         </div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ImageIcon className="w-4 h-4 text-[#3ECF8E]" />
-                        <p className="text-xs text-muted-foreground font-medium">
-                          Back Image
-                        </p>
-                      </div>
-                      <div
-                        onClick={() => openImagePreview(request.backImage!)}
-                        className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
-                      >
-                        <div className="text-center">
-                          <ImageIcon className="w-12 h-12 text-muted-foreground group-hover:text-[#3ECF8E] transition-colors mx-auto mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            Click to preview
-                          </p>
+                        <div
+                          onClick={() => openImagePreview(request.frontImage!)}
+                          className="aspect-video bg-background/50 rounded-lg overflow-hidden border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
+                        >
+                          <img
+                            src={request.frontImage}
+                            alt="Front ID"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                              (
+                                e.target as HTMLImageElement
+                              ).parentElement!.innerHTML =
+                                '<div class="w-full h-full flex items-center justify-center"><div class="text-center"><div class="w-12 h-12 text-muted-foreground mx-auto mb-2">📄</div><p class="text-xs text-muted-foreground">Failed to load image</p></div></div>';
+                            }}
+                          />
                         </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Back Image */}
+                    {request.backImage && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <ImageIcon className="w-4 h-4 text-[#3ECF8E]" />
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Back Image
+                          </p>
+                        </div>
+                        <div
+                          onClick={() => openImagePreview(request.backImage!)}
+                          className="aspect-video bg-background/50 rounded-lg overflow-hidden border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
+                        >
+                          <img
+                            src={request.backImage}
+                            alt="Back ID"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                              (
+                                e.target as HTMLImageElement
+                              ).parentElement!.innerHTML =
+                                '<div class="w-full h-full flex items-center justify-center"><div class="text-center"><div class="w-12 h-12 text-muted-foreground mx-auto mb-2">📄</div><p class="text-xs text-muted-foreground">Failed to load image</p></div></div>';
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show placeholder if no images */}
+                    {!request.frontImage && !request.backImage && (
+                      <div className="col-span-2 text-center py-8">
+                        <ImageIcon className="w-12 h-12 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          No images available for this request
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

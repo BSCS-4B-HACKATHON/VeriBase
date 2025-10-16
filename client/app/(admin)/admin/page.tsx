@@ -36,6 +36,7 @@ import {
   Shield,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 interface StatCard {
   title: string;
@@ -74,6 +75,9 @@ export default function AdminDashboardPage() {
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [processingRequest, setProcessingRequest] = useState<string | null>(
+    null
+  );
   const [blockchainData, setBlockchainData] = useState({
     network: "Ethereum Mainnet",
     nftsMinted: 1247,
@@ -86,138 +90,156 @@ export default function AdminDashboardPage() {
   }, []);
 
   const fetchDashboardData = async () => {
-    // TODO: Replace with actual API calls
-    setStats([
-      {
-        title: "Total Users",
-        value: 2845,
-        change: "+12 this week",
-        icon: Users,
-        color: "text-blue-500",
-      },
-      {
-        title: "Pending Requests",
-        value: 47,
-        change: "+5 today",
-        icon: Clock,
-        color: "text-yellow-500",
-      },
-      {
-        title: "Approved Verifications",
-        value: 1893,
-        change: "+23 this week",
-        icon: CheckCircle2,
-        color: "text-green-500",
-      },
-      {
-        title: "Rejected Verifications",
-        value: 124,
-        change: "-3 this week",
-        icon: XCircle,
-        color: "text-red-500",
-      },
-      {
-        title: "Total NFT Documents",
-        value: 1247,
-        change: "+18 this week",
-        icon: FileText,
-        color: "text-[#3ECF8E]",
-      },
-    ]);
+    try {
+      // Fetch global stats from backend (includes on-chain data)
+      const statsRes = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/stats/global`
+      );
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        if (statsData.success) {
+          const s = statsData.stats;
+          setStats([
+            {
+              title: "Total Users",
+              value: s.totalUsers,
+              change: `${s.approvalRate}% approval rate`,
+              icon: Users,
+              color: "text-blue-500",
+            },
+            {
+              title: "Pending Requests",
+              value: s.pendingRequests,
+              change: `${s.totalRequests} total`,
+              icon: Clock,
+              color: "text-yellow-500",
+            },
+            {
+              title: "Approved Verifications",
+              value: s.verifiedRequests,
+              change: `${s.nationalIdRequests} National ID`,
+              icon: CheckCircle2,
+              color: "text-green-500",
+            },
+            {
+              title: "Rejected Verifications",
+              value: s.rejectedRequests,
+              change: `${s.rejectionRate}% rejection rate`,
+              icon: XCircle,
+              color: "text-red-500",
+            },
+            {
+              title: "Total NFTs Minted",
+              value: s.totalNFTsMinted,
+              change: `${s.nationalIdNFTsMinted} ID | ${s.landOwnershipNFTsMinted} Land`,
+              icon: FileText,
+              color: "text-[#3ECF8E]",
+            },
+          ]);
+        }
+      }
 
-    setRequests([
-      {
-        id: "VRF-1093",
-        user: "0x742d...f0bEb",
-        type: "Land Title",
-        date: "2025-10-16",
-        status: "pending",
-      },
-      {
-        id: "VRF-1092",
-        user: "0x8a3f...9c2D",
-        type: "National ID",
-        date: "2025-10-16",
-        status: "pending",
-      },
-      {
-        id: "VRF-1091",
-        user: "0x5b2e...8f1A",
-        type: "Land Title",
-        date: "2025-10-15",
-        status: "approved",
-      },
-      {
-        id: "VRF-1090",
-        user: "0x9f6c...3d4E",
-        type: "National ID",
-        date: "2025-10-15",
-        status: "approved",
-      },
-      {
-        id: "VRF-1089",
-        user: "0x2d8a...7b5F",
-        type: "Land Title",
-        date: "2025-10-14",
-        status: "rejected",
-      },
-    ]);
+      // Fetch requests from backend
+      const requestsRes = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/requests?limit=10`
+      );
+      if (requestsRes.ok) {
+        const requestsData = await requestsRes.json();
+        if (requestsData.ok) {
+          const formattedRequests = requestsData.requests.map((req: any) => ({
+            id: req.requestId,
+            user: req.requesterWallet,
+            type:
+              req.requestType === "national_id" ? "National ID" : "Land Title",
+            date: new Date(req.createdAt).toISOString().split("T")[0],
+            status: req.status === "verified" ? "approved" : req.status,
+          }));
+          setRequests(formattedRequests);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+      toast.error("Failed to load dashboard data. Please refresh the page.");
+    }
 
-    setActivities([
-      {
-        id: "1",
-        action: "Admin approved request #1093",
-        timestamp: "2 minutes ago",
-        type: "approved",
-      },
-      {
-        id: "2",
-        action: "Verifier @marie added new authority",
-        timestamp: "15 minutes ago",
-        type: "added",
-      },
-      {
-        id: "3",
-        action: "User wallet 0xA3D... transferred NFT #432",
-        timestamp: "1 hour ago",
-        type: "transfer",
-      },
-      {
-        id: "4",
-        action: "Admin rejected request #1087",
-        timestamp: "2 hours ago",
-        type: "rejected",
-      },
-      {
-        id: "5",
-        action: "System updated verification criteria",
-        timestamp: "3 hours ago",
-        type: "added",
-      },
-    ]);
-
-    setAnnouncements([
-      {
-        id: "1",
-        title: "System Maintenance Scheduled",
-        description:
-          "Blockchain syncing will be temporarily unavailable on Oct 20.",
-        date: "2025-10-15",
-      },
-      {
-        id: "2",
-        title: "New Verification Authority Added",
-        description:
-          "Land Registry Office now available for instant verification.",
-        date: "2025-10-14",
-      },
-    ]);
+    // Set empty arrays for activities and announcements (these are not implemented yet in backend)
+    setActivities([]);
+    setAnnouncements([]);
   };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchDashboardData();
     setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
+  const handleApprove = async (requestId: string) => {
+    setProcessingRequest(requestId);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/requests/${requestId}/approve`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (res.ok) {
+        // Update local state
+        setRequests((prev) =>
+          prev.map((req) =>
+            req.id === requestId ? { ...req, status: "approved" } : req
+          )
+        );
+        // Refresh dashboard data
+        await fetchDashboardData();
+      } else {
+        const data = await res.json();
+        alert(`Failed to approve: ${data.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Failed to approve request:", error);
+      alert("Failed to approve request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    setProcessingRequest(requestId);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/requests/${requestId}/reject`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason: "Admin decision" }),
+        }
+      );
+
+      if (res.ok) {
+        // Update local state
+        setRequests((prev) =>
+          prev.map((req) =>
+            req.id === requestId ? { ...req, status: "rejected" } : req
+          )
+        );
+        // Refresh dashboard data
+        await fetchDashboardData();
+      } else {
+        const data = await res.json();
+        alert(`Failed to reject: ${data.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Failed to reject request:", error);
+      alert("Failed to reject request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -406,16 +428,41 @@ export default function AdminDashboardPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              asChild
-                              variant="ghost"
-                              size="sm"
-                              className="hover:bg-[#3ECF8E]/10 h-7 w-7 p-0"
-                            >
-                              <Link href={`/admin/requests/${request.id}`}>
-                                <Eye className="h-3.5 w-3.5" />
-                              </Link>
-                            </Button>
+                            {request.status === "pending" ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  onClick={() => handleApprove(request.id)}
+                                  disabled={processingRequest === request.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="hover:bg-green-500/10 text-green-500 h-7 px-2 text-xs"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  onClick={() => handleReject(request.id)}
+                                  disabled={processingRequest === request.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="hover:bg-red-500/10 text-red-500 h-7 px-2 text-xs"
+                                >
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                                  Reject
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                asChild
+                                variant="ghost"
+                                size="sm"
+                                className="hover:bg-[#3ECF8E]/10 h-7 w-7 p-0"
+                              >
+                                <Link href={`/admin/requests/${request.id}`}>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Link>
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

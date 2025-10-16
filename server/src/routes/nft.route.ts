@@ -1,33 +1,34 @@
 /**
- * NFT Minting Routes
+ * NFT Routes
  */
 
 import express from "express";
 import {
-    checkMintEligibility,
-    mintNFT,
-    getWalletRequests,
+  getWalletRequests,
+  decryptNFTMetadata,
+  deleteRequestAfterMint,
 } from "../controllers/nft.controller";
 
 const router = express.Router();
 
 /**
- * GET /api/requests/:requestId/can-mint
- * Check if a request can be minted by the user
- */
-router.get("/requests/:requestId/can-mint", checkMintEligibility);
-
-/**
- * POST /api/requests/:requestId/mint
- * Mint NFT for a verified request
- * Body: { userWalletAddress: string }
- */
-router.post("/requests/:requestId/mint", mintNFT);
-
-/**
  * GET /api/wallet/:address/requests
- * Get all requests for a wallet with mint eligibility status
+ * Get all requests for a wallet (only unminted requests)
  */
 router.get("/wallet/:address/requests", getWalletRequests);
+
+/**
+ * POST /api/nft/decrypt-metadata
+ * Decrypt NFT metadata from IPFS (owner only)
+ * Body: { metadataCid: string, ownerAddress: string }
+ */
+router.post("/nft/decrypt-metadata", decryptNFTMetadata);
+
+/**
+ * POST /api/nft/delete-request/:requestId
+ * Delete request after successful client-side minting
+ * Body: { userWalletAddress: string, transactionHash?: string }
+ */
+router.post("/nft/delete-request/:requestId", deleteRequestAfterMint);
 
 export default router;

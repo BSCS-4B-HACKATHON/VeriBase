@@ -87,11 +87,11 @@ contract LandOwnershipNFT is ERC721, Ownable {
     // ============ Owner Functions ============
     
     /**
-     * @notice Mints a Land Ownership NFT to a wallet
+     * @notice Mints a Land Ownership NFT to caller's wallet
      * @dev Multiple land ownership NFTs per wallet allowed. Metadata must be unique.
+     * @dev Public function - users mint for themselves
      */
     function mintLandOwnership(
-        address to,
         string calldata requestType,
         string calldata minimalPublicLabel,
         string calldata metadataCid,
@@ -99,7 +99,9 @@ contract LandOwnershipNFT is ERC721, Ownable {
         string calldata uploaderSignature,
         string calldata consentTextVersion,
         uint256 consentTimestamp
-    ) external onlyOwner returns (uint256) {
+    ) external returns (uint256) {
+        address to = msg.sender; // User mints to themselves
+        
         if (to == address(0)) revert InvalidAddress();
         if (_metadataHashExists[metadataHash]) revert DuplicateMetadata();
         
