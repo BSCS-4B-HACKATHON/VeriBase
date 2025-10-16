@@ -6,6 +6,7 @@ import {
   IconChartBar,
   IconDashboard,
   IconDatabase,
+  IconFile,
   IconFileAi,
   IconFileDescription,
   IconFileWord,
@@ -43,6 +44,11 @@ const navItems = [
     title: "Requests",
     url: "/requests",
     icon: IconListDetails,
+  },
+  {
+    title: "NFT Documents",
+    url: "/nfts",
+    icon: IconFile,
   },
 ];
 

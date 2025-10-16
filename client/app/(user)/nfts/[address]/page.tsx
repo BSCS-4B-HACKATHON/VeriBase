@@ -1,0 +1,733 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Copy,
+  Download,
+  Shield,
+  Calendar,
+  Hash,
+  FileText,
+  CheckCircle2,
+  Image as ImageIcon,
+  Globe,
+  Clock,
+  User,
+  Maximize2,
+  ChevronRight,
+  FileCheck,
+  Link as LinkIcon,
+  Send,
+} from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { TransferNFTModal } from "@/components/transfer-nft-modal";
+
+interface NFTDocument {
+  id: string;
+  tokenId: string;
+  title: string;
+  type: "Land Title" | "National ID";
+  status: "approved" | "pending" | "rejected";
+  mintedDate: string;
+  contractAddress: string;
+  ownerAddress: string;
+  imageUrl?: string;
+  metadataUrl?: string;
+  verified: boolean;
+  blockchainExplorerUrl: string;
+  network: string;
+  transactionHash: string;
+  ipfsCid?: string;
+  documentHash?: string;
+  uploadDate: string;
+  verificationAuthority: string;
+  validationTimestamp: string;
+}
+
+interface TimelineEvent {
+  title: string;
+  date: string;
+  status: "completed" | "current" | "upcoming";
+}
+
+export default function NFTDocumentViewPage() {
+  const params = useParams();
+  const router = useRouter();
+  const contractAddress = params.address as string;
+
+  const [nft, setNft] = useState<NFTDocument | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+  useEffect(() => {
+    // Fetch NFT details based on contract address
+    const fetchNFTDetails = async () => {
+      setIsLoading(true);
+      try {
+        // TODO: Replace with actual API call
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        // Mock data
+        const mockNFT: NFTDocument = {
+          id: "1",
+          tokenId: "1298",
+          title: "Land Title #1298",
+          type: "Land Title",
+          status: "approved",
+          mintedDate: "2025-10-14T10:30:00Z",
+          contractAddress:
+            contractAddress || "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+          ownerAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+          imageUrl:
+            "https://via.placeholder.com/800x600/1a1a1a/3ECF8E?text=Land+Title+Document",
+          verified: true,
+          blockchainExplorerUrl: `https://etherscan.io/nft/${contractAddress}/1298`,
+          network: "Ethereum Mainnet",
+          transactionHash:
+            "0x9f2e8a5b3c1d4f6a8e7b9c2d5e8f1a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1f",
+          ipfsCid: "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+          documentHash:
+            "0x5f3e8a2b9c1d4f6a7e8b3c2d5e9f1a4b6c8d2e5f7a1b3c6d0e2f5a8b1c4d7e0f",
+          uploadDate: "2025-10-10T14:20:00Z",
+          verificationAuthority: "National Land Registry",
+          validationTimestamp: "2025-10-14T09:15:00Z",
+        };
+
+        setNft(mockNFT);
+      } catch (error) {
+        console.error("Error fetching NFT details:", error);
+        toast.error("Failed to load NFT details");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (contractAddress) {
+      fetchNFTDetails();
+    }
+  }, [contractAddress]);
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard!`);
+  };
+
+  const handleCopyAllDetails = () => {
+    if (!nft) return;
+
+    const details = `
+NFT Document Details
+====================
+Title: ${nft.title}
+Type: ${nft.type}
+Status: ${nft.status}
+Token ID: ${nft.tokenId}
+Contract Address: ${nft.contractAddress}
+Owner Address: ${nft.ownerAddress}
+Network: ${nft.network}
+Minted Date: ${new Date(nft.mintedDate).toLocaleString()}
+Transaction Hash: ${nft.transactionHash}
+${nft.ipfsCid ? `IPFS CID: ${nft.ipfsCid}` : ""}
+Document Hash: ${nft.documentHash}
+Verification Authority: ${nft.verificationAuthority}
+    `.trim();
+
+    navigator.clipboard.writeText(details);
+    toast.success("All details copied to clipboard!");
+  };
+
+  const handleDownloadMetadata = () => {
+    if (!nft) return;
+
+    const metadata = {
+      name: nft.title,
+      description: `Verified ${nft.type} document stored on-chain`,
+      type: nft.type,
+      tokenId: nft.tokenId,
+      contractAddress: nft.contractAddress,
+      ownerAddress: nft.ownerAddress,
+      network: nft.network,
+      mintedDate: nft.mintedDate,
+      verified: nft.verified,
+      attributes: [
+        { trait_type: "Document Type", value: nft.type },
+        { trait_type: "Status", value: nft.status },
+        {
+          trait_type: "Verification Authority",
+          value: nft.verificationAuthority,
+        },
+        { trait_type: "Network", value: nft.network },
+      ],
+    };
+
+    const blob = new Blob([JSON.stringify(metadata, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nft-metadata-${nft.tokenId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast.success("Metadata downloaded!");
+  };
+
+  const shortenAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      approved: "bg-green-500/10 text-green-500 border-green-500/30",
+      pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30",
+      rejected: "bg-red-500/10 text-red-400 border-red-500/30",
+    };
+    return variants[status as keyof typeof variants] || variants.pending;
+  };
+
+  const timeline: TimelineEvent[] = [
+    {
+      title: "Request Submitted",
+      date: nft?.uploadDate || "",
+      status: "completed",
+    },
+    {
+      title: "Document Verified",
+      date: nft?.validationTimestamp || "",
+      status: "completed",
+    },
+    {
+      title: "NFT Minted",
+      date: nft?.mintedDate || "",
+      status: "completed",
+    },
+    {
+      title: "Stored On-Chain",
+      date: nft?.mintedDate || "",
+      status: "completed",
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto p-6 lg:p-8 space-y-8">
+          <div className="space-y-4">
+            <div className="h-10 w-48 bg-surface-300 rounded animate-pulse" />
+            <div className="h-6 w-96 bg-surface-300 rounded animate-pulse" />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="h-96 bg-surface-300 rounded-xl animate-pulse" />
+            <div className="space-y-4">
+              <div className="h-12 bg-surface-300 rounded animate-pulse" />
+              <div className="h-8 bg-surface-300 rounded animate-pulse" />
+              <div className="h-8 bg-surface-300 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!nft) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="bg-surface-75 rounded-2xl border-border/40 max-w-md">
+          <CardContent className="py-16 text-center">
+            <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">NFT Not Found</h3>
+            <p className="text-muted-foreground mb-6">
+              The NFT document you're looking for doesn't exist.
+            </p>
+            <Button asChild>
+              <Link href="/nfts">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to NFTs
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="container mx-auto p-6 lg:p-8 space-y-8">
+        {/* Header Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="space-y-4"
+        >
+          <Button
+            onClick={() => router.push("/nfts")}
+            variant="ghost"
+            size="sm"
+            className="mb-2 hover:bg-surface-300"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to NFTs
+          </Button>
+
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              NFT Document Details
+            </h1>
+            <p className="text-muted-foreground">
+              View all on-chain and verification details of your document.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Main Content - Two Column Layout */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left Column - NFT Image */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <Card className="bg-surface-75 rounded-xl overflow-hidden border-border/40 sticky top-6">
+              <CardContent className="p-0">
+                <div className="relative aspect-[4/3] bg-surface-200">
+                  {nft.imageUrl ? (
+                    <img
+                      src={nft.imageUrl}
+                      alt={nft.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-20 h-20 text-muted-foreground/30" />
+                    </div>
+                  )}
+
+                  {/* Verified Badge Overlay */}
+                  {nft.verified && (
+                    <div className="absolute top-4 left-4 bg-[#3ECF8E]/90 backdrop-blur-sm text-black px-3 py-1.5 rounded-full flex items-center gap-2 text-sm font-medium">
+                      <Shield className="w-4 h-4" />
+                      Verified On-Chain
+                    </div>
+                  )}
+
+                  {/* Zoom Button */}
+                  <Button
+                    onClick={() => setIsImageModalOpen(true)}
+                    variant="secondary"
+                    size="sm"
+                    className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-sm hover:bg-black/70 text-white border-white/20"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge
+                      variant="outline"
+                      className={`${
+                        nft.type === "Land Title"
+                          ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                          : "bg-purple-500/10 text-purple-400 border-purple-500/30"
+                      }`}
+                    >
+                      {nft.type}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={getStatusBadge(nft.status)}
+                    >
+                      {nft.status.charAt(0).toUpperCase() + nft.status.slice(1)}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Right Column - NFT Details */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="space-y-6"
+          >
+            {/* Title Card */}
+            <Card className="bg-surface-75 rounded-xl border-border/40">
+              <CardContent className="p-6 space-y-4">
+                <h2 className="text-2xl font-bold">{nft.title}</h2>
+
+                <Separator className="bg-border/40" />
+
+                {/* Basic Info */}
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs">Minted on</span>
+                    </div>
+                    <span className="text-sm font-medium text-right">
+                      {new Date(nft.mintedDate).toLocaleString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <User className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs">Owner</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono text-foreground">
+                        {shortenAddress(nft.ownerAddress)}
+                      </code>
+                      <Button
+                        onClick={() =>
+                          handleCopy(nft.ownerAddress, "Owner address")
+                        }
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Hash className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs">Token ID</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono text-foreground">
+                        {nft.tokenId}
+                      </code>
+                      <Button
+                        onClick={() => handleCopy(nft.tokenId, "Token ID")}
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <FileText className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs">Contract</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://etherscan.io/address/${nft.contractAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-mono text-[#3ECF8E] hover:underline"
+                      >
+                        {shortenAddress(nft.contractAddress)}
+                      </a>
+                      <Button
+                        onClick={() =>
+                          handleCopy(nft.contractAddress, "Contract address")
+                        }
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Globe className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs">Network</span>
+                    </div>
+                    <span className="text-sm font-medium">{nft.network}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card className="bg-surface-75 rounded-xl border-border/40">
+              <CardContent className="p-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <Button asChild className="w-full" size="lg">
+                    <a
+                      href={nft.blockchainExplorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View on Explorer
+                    </a>
+                  </Button>
+                  <Button
+                    onClick={handleDownloadMetadata}
+                    variant="outline"
+                    size="lg"
+                    className="w-full border-[#3ECF8E]/30 hover:bg-[#3ECF8E]/10"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+                <Button
+                  onClick={() => setIsTransferModalOpen(true)}
+                  variant="ghost"
+                  size="lg"
+                  className="w-full mt-3 hover:bg-surface-300"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Transfer
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Metadata & Verification Details Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="grid gap-6 md:grid-cols-2"
+        >
+          {/* Verification Details */}
+          <Card className="bg-surface-75 rounded-xl border-border/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Shield className="w-5 h-5 text-[#3ECF8E]" />
+                Verification Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Document Type
+                </label>
+                <div className="text-sm font-medium">{nft.type}</div>
+              </div>
+
+              <Separator className="bg-border/40" />
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Upload Date
+                </label>
+                <div className="text-sm font-medium">
+                  {new Date(nft.uploadDate).toLocaleString()}
+                </div>
+              </div>
+
+              <Separator className="bg-border/40" />
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Verification Authority
+                </label>
+                <div className="text-sm font-medium">
+                  {nft.verificationAuthority}
+                </div>
+              </div>
+
+              <Separator className="bg-border/40" />
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Validation Timestamp
+                </label>
+                <div className="text-sm font-medium">
+                  {new Date(nft.validationTimestamp).toLocaleString()}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Blockchain Details */}
+          <Card className="bg-surface-75 rounded-xl border-border/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <LinkIcon className="w-5 h-5 text-[#3ECF8E]" />
+                Blockchain Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Transaction Hash
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs font-mono bg-surface-200 px-3 py-2 rounded border border-border/40 overflow-x-auto">
+                    {shortenAddress(nft.transactionHash)}
+                  </code>
+                  <Button
+                    onClick={() =>
+                      handleCopy(nft.transactionHash, "Transaction hash")
+                    }
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator className="bg-border/40" />
+
+              {nft.ipfsCid && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground">
+                      IPFS CID
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs font-mono bg-surface-200 px-3 py-2 rounded border border-border/40 overflow-x-auto">
+                        {nft.ipfsCid}
+                      </code>
+                      <Button
+                        onClick={() => handleCopy(nft.ipfsCid!, "IPFS CID")}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <Separator className="bg-border/40" />
+                </>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground">
+                  Document Hash
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs font-mono bg-surface-200 px-3 py-2 rounded border border-border/40 overflow-x-auto">
+                    {shortenAddress(nft.documentHash!)}
+                  </code>
+                  <Button
+                    onClick={() =>
+                      handleCopy(nft.documentHash!, "Document hash")
+                    }
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Transaction Timeline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <Card className="bg-surface-75 rounded-xl border-border/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Clock className="w-5 h-5 text-[#3ECF8E]" />
+                NFT Lifecycle Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                {timeline.map((event, index) => (
+                  <div key={index} className="flex gap-4 pb-8 last:pb-0">
+                    <div className="relative flex flex-col items-center">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center z-10 ${
+                          event.status === "completed"
+                            ? "bg-[#3ECF8E]/20 border-2 border-[#3ECF8E]"
+                            : "bg-surface-300 border-2 border-border"
+                        }`}
+                      >
+                        {event.status === "completed" && (
+                          <CheckCircle2 className="w-4 h-4 text-[#3ECF8E]" />
+                        )}
+                      </div>
+                      {index < timeline.length - 1 && (
+                        <div className="absolute top-8 w-0.5 h-full bg-border/40" />
+                      )}
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <h4 className="font-semibold text-sm">{event.title}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(event.date).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Image Modal/Fullscreen */}
+      {isImageModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          <div className="relative max-w-7xl w-full">
+            <Button
+              onClick={() => setIsImageModalOpen(false)}
+              variant="secondary"
+              size="sm"
+              className="absolute top-4 right-4 z-10"
+            >
+              Close
+            </Button>
+            <img
+              src={nft.imageUrl}
+              alt={nft.title}
+              className="w-full h-auto rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Transfer NFT Modal */}
+      {nft && (
+        <TransferNFTModal
+          isOpen={isTransferModalOpen}
+          onClose={() => setIsTransferModalOpen(false)}
+          nft={nft}
+        />
+      )}
+    </div>
+  );
+}
