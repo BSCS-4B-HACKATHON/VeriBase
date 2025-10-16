@@ -233,7 +233,10 @@ export const decryptNFTMetadata = async (req: Request, res: Response) => {
 
       const filesOut = await Promise.all(decryptTasks);
       decryptedMetadata.decryptedFiles = filesOut;
-      console.log("📦 Total decrypted files:", decryptedMetadata.decryptedFiles.length);
+      console.log(
+        "📦 Total decrypted files:",
+        decryptedMetadata.decryptedFiles.length
+      );
     } else {
       decryptedMetadata.decryptedFiles = fileEntries;
     }
