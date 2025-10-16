@@ -6,6 +6,11 @@
       "type": "constructor"
     },
     {
+      "inputs": [],
+      "name": "DuplicateMetadata",
+      "type": "error"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -536,6 +541,25 @@
     {
       "inputs": [
         {
+          "internalType": "string",
+          "name": "metadataHash",
+          "type": "string"
+        }
+      ],
+      "name": "isMetadataUnique",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "to",
           "type": "address"
@@ -809,5 +833,5 @@
       "type": "function"
     }
   ],
-  "address": "0xbe5fb46274763165a8e9bda180273b75d817fec0"
+  "address": "0x57c236c2097c49c6f3c998b2fcf07f67596dc5f4"
 }

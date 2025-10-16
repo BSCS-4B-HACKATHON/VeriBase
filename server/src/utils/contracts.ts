@@ -63,20 +63,37 @@ export function createAdminWalletClient() {
 /**
  * Mint a National ID NFT
  * @param recipientAddress - Address to receive the NFT
- * @param tokenURI - IPFS URI of the metadata
+ * @param metadata - Metadata for the NFT
  * @returns Transaction hash
  */
 export async function mintNationalIdNFT(
   recipientAddress: `0x${string}`,
-  tokenURI: string
+  metadata: {
+    requestType: string;
+    minimalPublicLabel: string;
+    metadataCid: string;
+    metadataHash: string;
+    uploaderSignature: string;
+    consentTextVersion: string;
+    consentTimestamp: number;
+  }
 ): Promise<`0x${string}`> {
   const walletClient = createAdminWalletClient();
 
   const hash = await walletClient.writeContract({
     address: CONTRACT_ADDRESSES.NationalIdNFT,
     abi: NationalIdNFTABI,
-    functionName: "safeMint",
-    args: [recipientAddress, tokenURI],
+    functionName: "mintNationalId",
+    args: [
+      recipientAddress,
+      metadata.requestType,
+      metadata.minimalPublicLabel,
+      metadata.metadataCid,
+      metadata.metadataHash,
+      metadata.uploaderSignature,
+      metadata.consentTextVersion,
+      BigInt(metadata.consentTimestamp),
+    ],
   });
 
   console.log("✅ National ID NFT mint transaction:", hash);
@@ -86,20 +103,37 @@ export async function mintNationalIdNFT(
 /**
  * Mint a Land Ownership NFT
  * @param recipientAddress - Address to receive the NFT
- * @param tokenURI - IPFS URI of the metadata
+ * @param metadata - Metadata for the NFT
  * @returns Transaction hash
  */
 export async function mintLandOwnershipNFT(
   recipientAddress: `0x${string}`,
-  tokenURI: string
+  metadata: {
+    requestType: string;
+    minimalPublicLabel: string;
+    metadataCid: string;
+    metadataHash: string;
+    uploaderSignature: string;
+    consentTextVersion: string;
+    consentTimestamp: number;
+  }
 ): Promise<`0x${string}`> {
   const walletClient = createAdminWalletClient();
 
   const hash = await walletClient.writeContract({
     address: CONTRACT_ADDRESSES.LandOwnershipNFT,
     abi: LandOwnershipNFTABI,
-    functionName: "safeMint",
-    args: [recipientAddress, tokenURI],
+    functionName: "mintLandOwnership",
+    args: [
+      recipientAddress,
+      metadata.requestType,
+      metadata.minimalPublicLabel,
+      metadata.metadataCid,
+      metadata.metadataHash,
+      metadata.uploaderSignature,
+      metadata.consentTextVersion,
+      BigInt(metadata.consentTimestamp),
+    ],
   });
 
   console.log("✅ Land Ownership NFT mint transaction:", hash);
@@ -109,19 +143,55 @@ export async function mintLandOwnershipNFT(
 /**
  * Check if an address has a National ID NFT
  * @param address - Address to check
- * @returns true if address has at least one National ID NFT
+ * @returns true if address has a National ID NFT
  */
 export async function hasNationalIdNFT(
   address: `0x${string}`
 ): Promise<boolean> {
-  const balance = (await publicClient.readContract({
+  const hasId = (await publicClient.readContract({
     address: CONTRACT_ADDRESSES.NationalIdNFT,
     abi: NationalIdNFTABI,
-    functionName: "balanceOf",
+    functionName: "hasNationalId",
     args: [address],
-  })) as bigint;
+  })) as boolean;
 
-  return balance > 0n;
+  return hasId;
+}
+
+/**
+ * Check if metadata is unique for National ID
+ * @param metadataHash - Hash of metadata
+ * @returns true if unique
+ */
+export async function isNationalIdMetadataUnique(
+  metadataHash: string
+): Promise<boolean> {
+  const isUnique = (await publicClient.readContract({
+    address: CONTRACT_ADDRESSES.NationalIdNFT,
+    abi: NationalIdNFTABI,
+    functionName: "isMetadataUnique",
+    args: [metadataHash],
+  })) as boolean;
+
+  return isUnique;
+}
+
+/**
+ * Check if metadata is unique for Land Ownership
+ * @param metadataHash - Hash of metadata
+ * @returns true if unique
+ */
+export async function isLandOwnershipMetadataUnique(
+  metadataHash: string
+): Promise<boolean> {
+  const isUnique = (await publicClient.readContract({
+    address: CONTRACT_ADDRESSES.LandOwnershipNFT,
+    abi: LandOwnershipNFTABI,
+    functionName: "isMetadataUnique",
+    args: [metadataHash],
+  })) as boolean;
+
+  return isUnique;
 }
 
 /**
@@ -141,35 +211,35 @@ export async function getLandBalance(address: `0x${string}`): Promise<bigint> {
 }
 
 /**
- * Get token URI (metadata) for a National ID NFT
+ * Get National ID token metadata
  * @param tokenId - Token ID
- * @returns Token URI
+ * @returns Metadata object
  */
-export async function getNationalIdTokenURI(tokenId: bigint): Promise<string> {
-  const uri = (await publicClient.readContract({
+export async function getNationalIdMetadata(tokenId: bigint): Promise<any> {
+  const metadata = await publicClient.readContract({
     address: CONTRACT_ADDRESSES.NationalIdNFT,
     abi: NationalIdNFTABI,
-    functionName: "tokenURI",
+    functionName: "getMetadata",
     args: [tokenId],
-  })) as string;
+  });
 
-  return uri;
+  return metadata;
 }
 
 /**
- * Get token URI (metadata) for a Land Ownership NFT
+ * Get Land Ownership token metadata
  * @param tokenId - Token ID
- * @returns Token URI
+ * @returns Metadata object
  */
-export async function getLandTokenURI(tokenId: bigint): Promise<string> {
-  const uri = (await publicClient.readContract({
+export async function getLandOwnershipMetadata(tokenId: bigint): Promise<any> {
+  const metadata = await publicClient.readContract({
     address: CONTRACT_ADDRESSES.LandOwnershipNFT,
     abi: LandOwnershipNFTABI,
-    functionName: "tokenURI",
+    functionName: "getMetadata",
     args: [tokenId],
-  })) as string;
+  });
 
-  return uri;
+  return metadata;
 }
 
 /**

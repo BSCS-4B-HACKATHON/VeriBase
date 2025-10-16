@@ -82,12 +82,20 @@ async function main() {
   });
 
   console.log(`   Transaction hash: ${nationalIdHash}`);
+  console.log(`   Waiting for confirmation...`);
   const nationalIdReceipt = await publicClient.waitForTransactionReceipt({
     hash: nationalIdHash,
+    confirmations: 2,
   });
   const nationalIdAddress = nationalIdReceipt.contractAddress!;
   console.log(`   ✅ NationalIdNFT deployed to: ${nationalIdAddress}`);
   console.log();
+
+  // Get current nonce for next transaction
+  const currentNonce = await publicClient.getTransactionCount({
+    address: account.address,
+  });
+  console.log(`   Current nonce: ${currentNonce}`);
 
   // Deploy LandOwnershipNFT
   console.log("🔨 Deploying LandOwnershipNFT...");
@@ -95,36 +103,49 @@ async function main() {
     abi: landOwnershipArtifact.abi,
     bytecode: landOwnershipArtifact.bytecode,
     args: [],
+    nonce: currentNonce,
   });
 
   console.log(`   Transaction hash: ${landOwnershipHash}`);
+  console.log(`   Waiting for confirmation...`);
   const landOwnershipReceipt = await publicClient.waitForTransactionReceipt({
     hash: landOwnershipHash,
+    confirmations: 2,
   });
   const landOwnershipAddress = landOwnershipReceipt.contractAddress!;
   console.log(`   ✅ LandOwnershipNFT deployed to: ${landOwnershipAddress}`);
   console.log();
 
-  // Deploy LandTransferContract
+  // Get nonce for next transaction
+  const transferNonce = await publicClient.getTransactionCount({
+    address: account.address,
+  });
+
+  // Deploy LandTransferContract (FREE transfers - no fees)
   console.log("🔨 Deploying LandTransferContract...");
-  const transferFeeBasisPoints = 250n; // 2.5% fee
-  const feeRecipient = account.address;
 
   const landTransferHash = await walletClient.deployContract({
     abi: landTransferArtifact.abi,
     bytecode: landTransferArtifact.bytecode,
-    args: [landOwnershipAddress, transferFeeBasisPoints, feeRecipient],
+    args: [landOwnershipAddress],
+    nonce: transferNonce,
   });
 
   console.log(`   Transaction hash: ${landTransferHash}`);
+  console.log(`   Waiting for confirmation...`);
   const landTransferReceipt = await publicClient.waitForTransactionReceipt({
     hash: landTransferHash,
+    confirmations: 2,
   });
   const landTransferAddress = landTransferReceipt.contractAddress!;
   console.log(`   ✅ LandTransferContract deployed to: ${landTransferAddress}`);
-  console.log(`   Transfer Fee: ${transferFeeBasisPoints / 100n}%`);
-  console.log(`   Fee Recipient: ${feeRecipient}`);
+  console.log(`   Transfer Type: FREE (no payment required)`);
   console.log();
+
+  // Get nonce for authorization transaction
+  const authNonce = await publicClient.getTransactionCount({
+    address: account.address,
+  });
 
   // Set the transfer contract as authorized on LandOwnershipNFT
   console.log("🔗 Authorizing LandTransferContract on LandOwnershipNFT...");
@@ -133,9 +154,15 @@ async function main() {
     abi: landOwnershipArtifact.abi,
     functionName: "setTransferContract",
     args: [landTransferAddress],
+    nonce: authNonce,
   });
 
-  await publicClient.waitForTransactionReceipt({ hash: authHash });
+  console.log(`   Transaction hash: ${authHash}`);
+  console.log(`   Waiting for confirmation...`);
+  await publicClient.waitForTransactionReceipt({ 
+    hash: authHash,
+    confirmations: 2,
+  });
   console.log("   ✅ LandTransferContract authorized");
   console.log();
 

@@ -15,6 +15,7 @@ This directory contains two separate NFT smart contracts for identity and land o
 - ❌ Cannot be approved or listed for sale
 - 📦 Stores encrypted metadata matching DB schema
 - 🔒 Only mintable by contract owner (backend server)
+- 🔐 **100% unique metadata - duplicate metadataHash rejected**
 
 **Use Cases:**
 
@@ -34,6 +35,7 @@ This directory contains two separate NFT smart contracts for identity and land o
 - ❌ Cannot be transferred directly wallet-to-wallet
 - 📦 Stores encrypted metadata matching DB schema
 - 🔒 Only mintable by contract owner (backend server)
+- 🔐 **100% unique metadata - duplicate metadataHash rejected**
 
 **Use Cases:**
 
@@ -240,8 +242,17 @@ const hasId = await nationalIdNFT.read.hasNationalId([wallet]);
 // Get National ID token
 const tokenId = await nationalIdNFT.read.getTokenIdByWallet([wallet]);
 
+// Check if metadata is unique before minting
+const isUnique = await nationalIdNFT.read.isMetadataUnique([metadataHash]);
+if (!isUnique) {
+  console.error("Duplicate metadata detected!");
+}
+
 // Get all land tokens owned by wallet
 const landTokens = await landOwnershipNFT.read.getTokensByWallet([wallet]);
+
+// Check if land metadata is unique
+const landUnique = await landOwnershipNFT.read.isMetadataUnique([metadataHash]);
 
 // Get metadata
 const metadata = await nationalIdNFT.read.getMetadata([tokenId]);
@@ -275,6 +286,13 @@ console.log(metadata.files[0].filename);
 - ✅ National ID cannot be transferred (soul-bound)
 - ✅ Land ownership requires authorized contract
 - ✅ Prevents unauthorized property transfers
+
+### 5. Uniqueness Protection
+
+- ✅ Duplicate metadata rejected automatically
+- ✅ Each National ID is 100% unique
+- ✅ Each Land Ownership document is 100% unique
+- ✅ Prevents duplicate document registration
 
 ## Testing
 
