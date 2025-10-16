@@ -1,17 +1,29 @@
 "use client";
 
 import * as React from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
-  MoreHorizontal,
   Eye,
   Check,
   X,
   Filter,
-  ArrowRight,
+  Download,
+  RefreshCw,
+  Calendar,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  MoreHorizontal,
   User,
-  Copy,
+  MapPin,
+  Image as ImageIcon,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,51 +32,93 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { mockRequests } from "@/lib/mock-data";
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import Link from "next/link";
 
 type FilterTab = "all" | "pending" | "verified" | "rejected";
+
+interface ExtendedRequest extends VerificationRequest {
+  documentType?: "Land Title" | "National ID";
+  email?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  frontImage?: string;
+  backImage?: string;
+  statusHistory?: Array<{
+    status: string;
+    timestamp: string;
+    by: string;
+  }>;
+}
 
 function getStatusBadge(status: VerificationStatus) {
   const variants: Record<
     VerificationStatus,
-    { className: string; label: string }
+    { className: string; label: string; icon: any }
   > = {
     verified: {
       className:
-        "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20",
-      label: "Verified",
+        "bg-green-500/10 text-green-500 border-green-500/30 hover:bg-green-500/20",
+      label: "Approved",
+      icon: CheckCircle2,
     },
     pending: {
       className:
-        "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20",
+        "bg-yellow-500/10 text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/20",
       label: "Pending",
+      icon: Clock,
     },
     rejected: {
       className:
-        "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20 hover:bg-red-500/20",
+        "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20",
       label: "Rejected",
+      icon: XCircle,
     },
   };
 
+  const config = variants[status];
+  const Icon = config.icon;
+
   return (
-    <Badge variant="outline" className={variants[status].className}>
-      {variants[status].label}
+    <Badge variant="outline" className={config.className}>
+      <Icon className="w-3 h-3 mr-1" />
+      {config.label}
     </Badge>
   );
 }
@@ -74,228 +128,271 @@ function shortenAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function RequestCardSkeleton() {
-  return (
-    <Card className="rounded-2xl border-muted/40">
-      <CardHeader className="space-y-3 pb-4">
-        <div className="flex items-start justify-between">
-          <Skeleton className="h-6 w-20" />
-          <Skeleton className="h-6 w-24" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3 pb-4">
-        <Skeleton className="h-5 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-1/2" />
-      </CardContent>
-      <CardFooter className="pt-4 border-t border-border/40">
-        <Skeleton className="h-9 w-full" />
-      </CardFooter>
-    </Card>
-  );
-}
-
-function AdminRequestCard({
+// Request Details Modal Component
+function RequestDetailsModal({
   request,
-  onClick,
+  isOpen,
+  onClose,
   onApprove,
   onReject,
 }: {
-  request: VerificationRequest;
-  onClick: () => void;
+  request: ExtendedRequest | null;
+  isOpen: boolean;
+  onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
 }) {
-  const [copiedAssetId, setCopiedAssetId] = React.useState(false);
-  const [copiedWallet, setCopiedWallet] = React.useState(false);
+  if (!request) return null;
 
-  const copyToClipboard = async (text: string, type: "asset" | "wallet") => {
-    try {
-      await navigator.clipboard.writeText(text);
-      if (type === "asset") {
-        setCopiedAssetId(true);
-        setTimeout(() => setCopiedAssetId(false), 2000);
-        toast.success("Asset ID copied to clipboard");
-      } else {
-        setCopiedWallet(true);
-        setTimeout(() => setCopiedWallet(false), 2000);
-        toast.success("Wallet address copied to clipboard");
-      }
-    } catch (err) {
-      toast.error("Failed to copy to clipboard");
-    }
-  };
+  const statusHistory = request.statusHistory || [
+    {
+      status: "Submitted",
+      timestamp: request.createdAt,
+      by: "User",
+    },
+    {
+      status: request.status,
+      timestamp: new Date().toISOString(),
+      by: "Admin",
+    },
+  ];
 
   return (
-    <Card className="group rounded-2xl border-muted/40 bg-muted/40 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 overflow-hidden">
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              {request.assetType}
-            </span>
-          </div>
-          {getStatusBadge(request.status)}
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-          <User className="h-3 w-3" />
-          <span>Submitted by {request.userName}</span>
-        </div>
-      </CardHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-surface-75 border-border/40 rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">
+            Request Details
+          </DialogTitle>
+          <DialogDescription>
+            Review verification request information and take action
+          </DialogDescription>
+        </DialogHeader>
 
-      <CardContent className="space-y-3 pb-4">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Asset ID</p>
-          <div className="flex items-center gap-2 group/copy">
-            <p className="font-mono text-sm font-medium text-foreground flex-1 truncate">
-              {request.assetId}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard(request.assetId, "asset");
-              }}
-            >
-              {copiedAssetId ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
+        <div className="space-y-6">
+          {/* User Info Section */}
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="w-5 h-5 text-[#3ECF8E]" />
+                User Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Name</p>
+                  <p className="text-sm font-medium">{request.userName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Email</p>
+                  <p className="text-sm font-medium">
+                    {request.email || "Not provided"}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Wallet Address
+                  </p>
+                  <code className="text-sm font-mono bg-background/50 px-2 py-1 rounded">
+                    {request.walletAddress}
+                  </code>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Document Details Section */}
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#3ECF8E]" />
+                Document Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Document Type
+                  </p>
+                  <Badge variant="outline" className="bg-background/50">
+                    {request.documentType || request.assetType}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Current Status
+                  </p>
+                  {getStatusBadge(request.status)}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Asset ID</p>
+                  <code className="text-sm font-mono">{request.assetId}</code>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Submitted On
+                  </p>
+                  <p className="text-sm">
+                    {format(new Date(request.createdAt), "MMM dd, yyyy HH:mm")}
+                  </p>
+                </div>
+                {request.issueDate && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Issue Date
+                    </p>
+                    <p className="text-sm">{request.issueDate}</p>
+                  </div>
+                )}
+                {request.expiryDate && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Expiry Date
+                    </p>
+                    <p className="text-sm">{request.expiryDate}</p>
+                  </div>
+                )}
+              </div>
+              {request.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Description
+                  </p>
+                  <p className="text-sm">{request.description}</p>
+                </div>
               )}
-            </Button>
-          </div>
+            </CardContent>
+          </Card>
+
+          {/* Uploaded Images Section */}
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-[#3ECF8E]" />
+                Uploaded Documents
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Front Side</p>
+                  <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Back Side</p>
+                  <div className="aspect-video bg-background/50 rounded-lg flex items-center justify-center border border-border/40">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Status History Timeline */}
+          <Card className="bg-foreground/5 rounded-xl border-white/10">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="w-5 h-5 text-[#3ECF8E]" />
+                Status History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {statusHistory.map((item, index) => (
+                  <div key={index} className="flex gap-3">
+                    <div className="relative flex flex-col items-center">
+                      <div className="w-8 h-8 rounded-full bg-[#3ECF8E]/20 flex items-center justify-center shrink-0 border-2 border-[#3ECF8E]">
+                        <div className="w-2 h-2 rounded-full bg-[#3ECF8E]" />
+                      </div>
+                      {index < statusHistory.length - 1 && (
+                        <div className="w-px flex-1 bg-border/40 mt-2 min-h-[20px]" />
+                      )}
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="text-sm font-medium">{item.status}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(item.timestamp), "MMM dd, yyyy HH:mm")}{" "}
+                        by {item.by}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Wallet Address</p>
-          <div className="flex items-center gap-2 group/copy">
-            <p className="font-mono text-sm text-foreground">
-              {shortenAddress(request.walletAddress)}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard(request.walletAddress, "wallet");
-              }}
-            >
-              {copiedWallet ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Date Submitted</p>
-          <p className="text-sm text-foreground">
-            {format(new Date(request.createdAt), "MMM dd, yyyy")}
-          </p>
-        </div>
-
-        {request.description && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Description</p>
-            <p className="text-sm text-foreground line-clamp-2">
-              {request.description}
-            </p>
-          </div>
-        )}
-      </CardContent>
-
-      <CardFooter className="pt-4 border-t border-border/40 flex flex-col gap-2">
-        {request.status === "pending" ? (
-          <>
-            <div className="flex gap-2 w-full">
+        <DialogFooter className="gap-2">
+          {request.status === "pending" && (
+            <>
               <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onApprove();
-                }}
-                variant="default"
-                size="sm"
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                variant="outline"
+                onClick={onReject}
+                className="border-red-500/30 text-red-500 hover:bg-red-500/10"
               >
-                <Check className="mr-2 h-4 w-4" />
-                Approve
-              </Button>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReject();
-                }}
-                variant="destructive"
-                size="sm"
-                className="flex-1"
-              >
-                <X className="mr-2 h-4 w-4" />
+                <X className="w-4 h-4 mr-2" />
                 Reject
               </Button>
-            </div>
-            <Button
-              onClick={onClick}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              View Details
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </>
-        ) : (
-          <div className="flex gap-2 w-full">
-            <Button
-              onClick={onClick}
-              variant="default"
-              size="sm"
-              className="flex-1 group-hover:bg-primary/90"
-            >
-              View Details
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="outline" size="sm">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[160px]">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClick();
-                  }}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  View Details
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
-      </CardFooter>
-    </Card>
+              <Button
+                onClick={onApprove}
+                className="bg-[#3ECF8E] hover:bg-[#3ECF8E]/90 text-black"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Approve Request
+              </Button>
+            </>
+          )}
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export default function AdminRequestsPage() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [activeFilter, setActiveFilter] = React.useState<FilterTab>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [documentTypeFilter, setDocumentTypeFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [selectedRequest, setSelectedRequest] =
+    useState<ExtendedRequest | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const filteredRequests = React.useMemo(() => {
-    let requests = mockRequests;
+  // Enhanced mock data with document types
+  const enhancedRequests: ExtendedRequest[] = useMemo(
+    () =>
+      mockRequests.map((req) => ({
+        ...req,
+        documentType: Math.random() > 0.5 ? "Land Title" : "National ID",
+        email: `${req.userName.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+        issueDate: "Jan 15, 2020",
+        expiryDate: "Jan 15, 2030",
+      })),
+    []
+  );
+
+  const filteredRequests = useMemo(() => {
+    let requests = enhancedRequests;
 
     // Apply status filter
     if (activeFilter !== "all") {
       requests = requests.filter((req) => req.status === activeFilter);
+    }
+
+    // Apply document type filter
+    if (documentTypeFilter !== "all") {
+      requests = requests.filter(
+        (req) => req.documentType === documentTypeFilter
+      );
     }
 
     // Apply search filter
@@ -308,171 +405,444 @@ export default function AdminRequestsPage() {
           req.assetId.toLowerCase().includes(query) ||
           req.assetType.toLowerCase().includes(query) ||
           req.walletAddress.toLowerCase().includes(query) ||
+          req.documentType?.toLowerCase().includes(query) ||
           req.description?.toLowerCase().includes(query)
       );
     }
 
     return requests;
-  }, [searchQuery, activeFilter]);
+  }, [searchQuery, activeFilter, documentTypeFilter, enhancedRequests]);
 
-  const statusCounts = React.useMemo(() => {
+  const statusCounts = useMemo(() => {
     return {
-      all: mockRequests.length,
-      pending: mockRequests.filter((r) => r.status === "pending").length,
-      verified: mockRequests.filter((r) => r.status === "verified").length,
-      rejected: mockRequests.filter((r) => r.status === "rejected").length,
+      all: enhancedRequests.length,
+      pending: enhancedRequests.filter((r) => r.status === "pending").length,
+      verified: enhancedRequests.filter((r) => r.status === "verified").length,
+      rejected: enhancedRequests.filter((r) => r.status === "rejected").length,
     };
-  }, []);
+  }, [enhancedRequests]);
 
-  const handleCardClick = (id: string) => {
-    router.push(`/admin/requests/${id}`);
+  // Pagination
+  const totalPages = Math.ceil(filteredRequests.length / rowsPerPage);
+  const paginatedRequests = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    return filteredRequests.slice(startIndex, endIndex);
+  }, [filteredRequests, currentPage, rowsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilter, documentTypeFilter]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setIsRefreshing(false);
+    toast.success("Data refreshed successfully");
+  };
+
+  const handleViewDetails = (request: ExtendedRequest) => {
+    setSelectedRequest(request);
+    setIsModalOpen(true);
   };
 
   const handleApprove = (id: string) => {
-    console.log("Approve request:", id);
-    // TODO: Implement approve logic with toast notification
+    toast.success(`Request ${id} approved successfully`);
+    setIsModalOpen(false);
+    // TODO: Implement actual approval logic
   };
 
   const handleReject = (id: string) => {
-    console.log("Reject request:", id);
-    // TODO: Implement reject logic with toast notification
+    toast.error(`Request ${id} rejected`);
+    setIsModalOpen(false);
+    // TODO: Implement actual rejection logic
+  };
+
+  const handleExportCSV = () => {
+    toast.success("Exporting data to CSV...");
+    // TODO: Implement CSV export
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 lg:p-8 space-y-8">
-        {/* Header Section */}
-        <div className="space-y-1">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            Verification Requests
-          </h1>
-          <p className="text-muted-foreground">
-            Review and manage all user verification requests
-          </p>
-        </div>
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+        {/* Header with Breadcrumb */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-col md:flex-row md:items-start md:justify-between gap-4"
+        >
+          <div className="space-y-2">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              Verification Requests
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Manage and review user-submitted verification documents.
+            </p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            variant="outline"
+            size="lg"
+            className="w-full md:w-auto border-[#3ECF8E]/30 hover:bg-[#3ECF8E]/10 hover:border-[#3ECF8E]/50 transition-colors shrink-0"
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        </motion.div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="rounded-2xl border-muted/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs font-medium">
-                Total Requests
-              </CardDescription>
-              <CardTitle className="text-3xl font-bold">
-                {statusCounts.all}
-              </CardTitle>
-            </CardHeader>
+        {/* Status Summary Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          <Card className="bg-surface-75 rounded-2xl border-border/40 hover:border-[#3ECF8E]/30 transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Total</p>
+                  <p className="text-2xl font-bold">{statusCounts.all}</p>
+                </div>
+                <FileText className="w-8 h-8 text-[#3ECF8E]" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-2xl border-muted/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs font-medium">
-                Pending Review
-              </CardDescription>
-              <CardTitle className="text-3xl font-bold text-amber-600 dark:text-amber-500">
-                {statusCounts.pending}
-              </CardTitle>
-            </CardHeader>
+          <Card className="bg-surface-75 rounded-2xl border-border/40 hover:border-yellow-500/30 transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Pending</p>
+                  <p className="text-2xl font-bold text-yellow-500">
+                    {statusCounts.pending}
+                  </p>
+                </div>
+                <Clock className="w-8 h-8 text-yellow-500" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-2xl border-muted/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs font-medium">
-                Verified
-              </CardDescription>
-              <CardTitle className="text-3xl font-bold text-emerald-600 dark:text-emerald-500">
-                {statusCounts.verified}
-              </CardTitle>
-            </CardHeader>
+          <Card className="bg-surface-75 rounded-2xl border-border/40 hover:border-green-500/30 transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Approved</p>
+                  <p className="text-2xl font-bold text-green-500">
+                    {statusCounts.verified}
+                  </p>
+                </div>
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              </div>
+            </CardContent>
           </Card>
-          <Card className="rounded-2xl border-muted/40 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs font-medium">
-                Rejected
-              </CardDescription>
-              <CardTitle className="text-3xl font-bold text-red-600 dark:text-red-500">
-                {statusCounts.rejected}
-              </CardTitle>
-            </CardHeader>
+          <Card className="bg-surface-75 rounded-2xl border-border/40 hover:border-red-500/30 transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Rejected</p>
+                  <p className="text-2xl font-bold text-red-400">
+                    {statusCounts.rejected}
+                  </p>
+                </div>
+                <XCircle className="w-8 h-8 text-red-400" />
+              </div>
+            </CardContent>
           </Card>
-        </div>
+        </motion.div>
 
-        {/* Search and Filter Section */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Tabs for Filtering */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
           <Tabs
             value={activeFilter}
             onValueChange={(v) => setActiveFilter(v as FilterTab)}
-            className="w-full sm:w-auto"
+            className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-4 sm:w-auto">
-              <TabsTrigger value="all" className="text-xs sm:text-sm">
-                All ({statusCounts.all})
+            <TabsList className="grid w-full grid-cols-4 h-12 bg-surface-75 rounded-xl">
+              <TabsTrigger
+                value="all"
+                className="data-[state=active]:bg-[#3ECF8E] data-[state=active]:text-black"
+              >
+                🗂️ All Requests
               </TabsTrigger>
-              <TabsTrigger value="pending" className="text-xs sm:text-sm">
-                Pending ({statusCounts.pending})
+              <TabsTrigger
+                value="pending"
+                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black"
+              >
+                🕓 Pending
               </TabsTrigger>
-              <TabsTrigger value="verified" className="text-xs sm:text-sm">
-                Verified ({statusCounts.verified})
+              <TabsTrigger
+                value="verified"
+                className="data-[state=active]:bg-green-500 data-[state=active]:text-black"
+              >
+                ✅ Approved
               </TabsTrigger>
-              <TabsTrigger value="rejected" className="text-xs sm:text-sm">
-                Rejected ({statusCounts.rejected})
+              <TabsTrigger
+                value="rejected"
+                className="data-[state=active]:bg-red-500 data-[state=active]:text-white"
+              >
+                ❌ Rejected
               </TabsTrigger>
             </TabsList>
           </Tabs>
+        </motion.div>
 
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search requests..."
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearchQuery(e.target.value)
-              }
-              className="pl-10 shadow-sm"
-            />
+        {/* Search & Filter Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between"
+        >
+          <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full lg:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[300px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search by user, document type, or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-surface-75 border-border/40 rounded-xl"
+              />
+            </div>
+
+            {/* Document Type Filter */}
+            <Select
+              value={documentTypeFilter}
+              onValueChange={setDocumentTypeFilter}
+            >
+              <SelectTrigger className="w-full sm:w-[180px] bg-surface-75 border-border/40 rounded-xl">
+                <FileText className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Document Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="Land Title">Land Title</SelectItem>
+                <SelectItem value="National ID">National ID</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
 
-        {/* Results Count */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Filter className="h-4 w-4" />
-          <span>
-            Showing {filteredRequests.length}{" "}
-            {filteredRequests.length === 1 ? "request" : "requests"}
-          </span>
-        </div>
-
-        {/* Cards Grid */}
-        {isLoading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <RequestCardSkeleton key={i} />
-            ))}
+          <div className="flex gap-2 w-full lg:w-auto">
+            {/* Export Button */}
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              className="flex-1 lg:flex-none border-border/40 hover:bg-[#3ECF8E]/10 hover:border-[#3ECF8E]/50 rounded-xl"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
-        ) : filteredRequests.length === 0 ? (
-          <Card className="rounded-2xl border-muted/40">
-            <CardContent className="py-16 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 mb-4">
-                <Search className="h-6 w-6 text-muted-foreground" />
+        </motion.div>
+
+        {/* Data Table */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <Card className="bg-surface-75 rounded-2xl border-border/40 shadow-sm shadow-black/20">
+            <CardContent className="p-6">
+              <div className="rounded-xl border border-white/10 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-border/40 bg-foreground/5">
+                      <TableHead className="font-semibold">User</TableHead>
+                      <TableHead className="font-semibold">
+                        Document Type
+                      </TableHead>
+                      <TableHead className="font-semibold">
+                        Submitted On
+                      </TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
+                      <TableHead className="font-semibold text-right">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <AnimatePresence mode="wait">
+                      {paginatedRequests.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center py-12 text-muted-foreground"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <Search className="w-8 h-8 opacity-50" />
+                              <p>No requests found</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginatedRequests.map((request, index) => (
+                          <motion.tr
+                            key={request.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2, delay: index * 0.05 }}
+                            className="border-border/40 hover:bg-muted/50 transition-colors cursor-pointer"
+                            onClick={() => handleViewDetails(request)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-[#3ECF8E]/20 flex items-center justify-center">
+                                  <User className="w-4 h-4 text-[#3ECF8E]" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {request.userName}
+                                  </p>
+                                  <code className="text-xs text-muted-foreground">
+                                    {shortenAddress(request.walletAddress)}
+                                  </code>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className="bg-background/50 text-xs"
+                              >
+                                {request.documentType}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {format(
+                                new Date(request.createdAt),
+                                "MMM dd, yyyy"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {getStatusBadge(request.status)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewDetails(request);
+                                  }}
+                                  className="hover:bg-[#3ECF8E]/10 h-8 w-8 p-0"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {request.status === "pending" && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleApprove(request.id);
+                                      }}
+                                      className="hover:bg-green-500/10 text-green-500 h-8 w-8 p-0"
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReject(request.id);
+                                      }}
+                                      className="hover:bg-red-500/10 text-red-500 h-8 w-8 p-0"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </motion.tr>
+                        ))
+                      )}
+                    </AnimatePresence>
+                  </TableBody>
+                </Table>
               </div>
-              <h3 className="text-lg font-semibold mb-2">No requests found</h3>
-              <p className="text-sm text-muted-foreground">
-                Try adjusting your search terms or filters
-              </p>
+
+              {/* Pagination */}
+              {filteredRequests.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Rows per page:</span>
+                    <Select
+                      value={rowsPerPage.toString()}
+                      onValueChange={(value) => {
+                        setRowsPerPage(Number(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-[70px] h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredRequests.map((request) => (
-              <AdminRequestCard
-                key={request.id}
-                request={request}
-                onClick={() => handleCardClick(request.id)}
-                onApprove={() => handleApprove(request.id)}
-                onReject={() => handleReject(request.id)}
-              />
-            ))}
-          </div>
-        )}
+        </motion.div>
       </div>
+
+      {/* Request Details Modal */}
+      <RequestDetailsModal
+        request={selectedRequest}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onApprove={() => selectedRequest && handleApprove(selectedRequest.id)}
+        onReject={() => selectedRequest && handleReject(selectedRequest.id)}
+      />
     </div>
   );
 }
