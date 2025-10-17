@@ -18,11 +18,11 @@ import LandTransferContractArtifact from "../abis/LandTransferContract.json";
 // Contract addresses from environment
 export const CONTRACT_ADDRESSES = {
   NationalIdNFT: (process.env.NATIONAL_ID_NFT_ADDRESS ||
-    "0xbe5fb46274763165a8e9bda180273b75d817fec0") as `0x${string}`,
+    "0xd8bf551a8942cbacab7888444d67cb5cd1212803") as `0x${string}`,
   LandOwnershipNFT: (process.env.LAND_OWNERSHIP_NFT_ADDRESS ||
-    "0xdfaf754cc95a9060bd6e467a652f9642e9e33c26") as `0x${string}`,
+    "0x7a92bc6623a98c272d69fc615d8483280370401c") as `0x${string}`,
   LandTransferContract: (process.env.LAND_TRANSFER_CONTRACT_ADDRESS ||
-    "0xecc7d23c7d82bbaf59cd0b40329d24fd42617467") as `0x${string}`,
+    "0xe8d3510b1938b7bd91bf9c1fc86f7af24e9bab83") as `0x${string}`,
 } as const;
 
 // Export ABIs
