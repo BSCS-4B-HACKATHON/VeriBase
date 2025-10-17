@@ -196,7 +196,7 @@ export default function RequestsPage() {
 
         {/* Cards Grid */}
         {isLoading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <RequestCardSkeleton key={i} />
             ))}
@@ -251,7 +251,7 @@ export default function RequestsPage() {
             );
           })()
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
             {filteredRequests.map((request, i) => (
               <RequestCard
                 key={i}

@@ -1,7 +1,7 @@
 import { shorten } from "@/lib/helpers";
 import { RequestType } from "@/lib/types";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2, AlertTriangle } from "lucide-react";
+import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2, Home, IdCard, Calendar, User, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { useClientMint } from "@/hooks/useClientMint";
 import { useAccount } from "wagmi";
 import { baseSepolia } from "viem/chains";
 import { useHasNationalId } from "@/hooks/useContracts";
+import { motion } from "motion/react";
 
 export default function RequestCard({
   request,
@@ -175,28 +176,73 @@ export default function RequestCard({
 
   const isPending = String(request.status).toLowerCase() === "pending";
   const isRejected = String(request.status).toLowerCase() === "rejected";
+  const isLandTitle = request.requestType === "land_ownership";
+  const isNationalId = request.requestType === "national_id";
+
+  // Define document type configurations
+  const docConfig = isLandTitle
+    ? {
+        icon: Home,
+        label: "Land Title",
+        accentColor: "emerald",
+        bgGradient: "bg-surface-75",
+        iconBg: "bg-emerald-500/10",
+        iconColor: "text-emerald-600 dark:text-emerald-400",
+        borderAccent: "border-l-emerald-500",
+        hoverShadow: "hover:shadow-emerald-500/20",
+      }
+    : {
+        icon: IdCard,
+        label: "National ID",
+        accentColor: "blue",
+        bgGradient: "bg-surface-75",
+        iconBg: "bg-blue-500/10",
+        iconColor: "text-blue-600 dark:text-blue-400",
+        borderAccent: "border-l-blue-500",
+        hoverShadow: "hover:shadow-blue-500/20",
+      };
+
+  const DocIcon = docConfig.icon;
 
   return (
-    // make card a column flex so content pushes footer to bottom and cards align in grid
-    <Card className="group rounded-2xl border-muted/40 bg-muted/40 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer overflow-visible flex flex-col">
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              {request.requestType}
-            </span>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      whileHover={{ y: -4 }}
+    >
+      <Card className={`group rounded-2xl ${docConfig.borderAccent} border-muted/40 bg-gradient-to-br ${docConfig.bgGradient} hover:shadow-xl ${docConfig.hoverShadow} transition-all duration-300 cursor-pointer overflow-visible flex flex-col h-full`}>
+        <CardHeader className="pb-3 pt-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`${docConfig.iconBg} p-2.5 rounded-xl`}>
+                <DocIcon className={`h-5 w-5 ${docConfig.iconColor}`} />
+              </div>
+              <div>
+                <span className={`text-sm font-bold ${docConfig.iconColor} tracking-wide`}>
+                  {docConfig.label}
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {request.minimalPublicLabel || "Document Request"}
+                </p>
+              </div>
+            </div>
+            {getStatusBadge(request.status)}
           </div>
-          {getStatusBadge(request.status)}
-        </div>
-      </CardHeader>
+        </CardHeader>
 
       {/* let content grow so footer sticks to bottom */}
-      <CardContent className="space-y-3 pb-4 flex-1">
-        {/* Request ID, Wallet, Date (unchanged) */}
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Request ID</p>
+      <CardContent className="space-y-4 pb-4 flex-1">
+        {/* Request ID with enhanced styling */}
+        <div className="bg-surface-100 rounded-lg p-3 border border-surface-300">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Request ID
+            </p>
+          </div>
           <div className="flex items-center gap-2 group/copy">
-            <p className="font-mono text-sm font-medium text-foreground truncate">
+            <p className="font-mono text-sm font-semibold text-foreground truncate">
               {shorten(request.requestId)}
             </p>
             <Button
@@ -217,10 +263,16 @@ export default function RequestCard({
           </div>
         </div>
 
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Wallet Address</p>
-          <div className="flex items-center gap-2 group/copy">
-            <p className="font-mono text-sm text-foreground">
+        {/* Requester Info with icon */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <User className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Requester
+            </p>
+          </div>
+          <div className="flex items-center gap-2 group/copy pl-1">
+            <p className="font-mono text-sm text-foreground font-medium">
               {shorten(request.requesterWallet)}
             </p>
             <Button
@@ -241,9 +293,15 @@ export default function RequestCard({
           </div>
         </div>
 
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Date Submitted</p>
-          <p className="text-sm text-foreground">
+        {/* Date Submitted with icon */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Date Submitted
+            </p>
+          </div>
+          <p className="text-sm font-medium text-foreground pl-1">
             {request.createdAt
               ? format(new Date(request.createdAt), "MMM dd, yyyy")
               : "—"}
@@ -361,5 +419,6 @@ export default function RequestCard({
         </div>
       </CardFooter>
     </Card>
+    </motion.div>
   );
 }
