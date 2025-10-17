@@ -1,7 +1,7 @@
 import { shorten } from "@/lib/helpers";
 import { RequestType } from "@/lib/types";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2 } from "lucide-react";
+import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { useClientMint } from "@/hooks/useClientMint";
 import { useAccount } from "wagmi";
 import { baseSepolia } from "viem/chains";
+import { useHasNationalId } from "@/hooks/useContracts";
 
 export default function RequestCard({
   request,
@@ -24,8 +25,12 @@ export default function RequestCard({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAssetId, setCopiedAssetId] = useState(false);
   const [copiedWallet, setCopiedWallet] = useState(false);
-  const { mintNFT, isMinting } = useClientMint();
-  const { isConnected, chain } = useAccount();
+  const { mintNFT, isMinting, switchToBaseSepolia, isWrongNetwork } = useClientMint();
+  const { isConnected, chain, address } = useAccount();
+
+  // Check if user already has a National ID NFT (only for national_id requests)
+  const { hasNationalId } = useHasNationalId(address);
+  const alreadyHasNFT = request.requestType === "national_id" && hasNationalId;
 
   // Check if on correct network
   const isCorrectNetwork = chain?.id === baseSepolia.id;
@@ -102,11 +107,29 @@ export default function RequestCard({
       return;
     }
 
-    // Check network - user must switch manually
-    if (!isCorrectNetwork) {
-      console.log("❌ Wrong network");
-      toast.error("Please switch to Base Sepolia network in your wallet");
+    // Check if user already has this type of NFT
+    if (alreadyHasNFT) {
+      console.log("❌ Already has National ID NFT");
+      toast.error("You already have a National ID NFT", {
+        description: "Each wallet can only have one National ID. Try using a different wallet.",
+      });
       return;
+    }
+
+    // If wrong network, try to switch automatically
+    if (!isCorrectNetwork && switchToBaseSepolia) {
+      console.log("⚠️ Wrong network, attempting to switch...");
+      toast.info("Switching to Base Sepolia network...");
+      try {
+        await switchToBaseSepolia();
+        toast.success("Switched to Base Sepolia!");
+        // Small delay to let the network switch settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (switchError: any) {
+        console.error("❌ Network switch failed:", switchError);
+        toast.error("Please switch to Base Sepolia in your wallet manually");
+        return;
+      }
     }
 
     console.log("✅ All checks passed, calling mintNFT...");
@@ -235,17 +258,25 @@ export default function RequestCard({
           String(request.status).toLowerCase() === "verified" ? (
             <Button
               onClick={handleMint}
-              variant="default"
+              variant={alreadyHasNFT ? "destructive" : "default"}
               size="sm"
               className="flex-1 h-10 w-full"
-              disabled={isLoading || isMinting}
+              disabled={isLoading || isMinting || !isConnected || alreadyHasNFT}
             >
               {isLoading || isMinting ? (
-                <Loader className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  {isMinting ? "Minting..." : "Processing..."}
+                </>
+              ) : alreadyHasNFT ? (
+                <>
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Already Have National ID
+                </>
               ) : !isConnected ? (
-                "Connect Wallet to Mint"
+                "Connect Wallet First"
               ) : !isCorrectNetwork ? (
-                "Switch to Base Sepolia"
+                "Click to Switch Network & Mint"
               ) : (
                 "Mint NFT"
               )}

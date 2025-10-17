@@ -10,11 +10,11 @@ import { baseSepolia } from "viem/chains";
 
 // Contract addresses - deployed on Base Sepolia
 export const CONTRACT_ADDRESSES = {
-  NationalIdNFT: "0xbe5fb46274763165a8e9bda180273b75d817fec0" as `0x${string}`,
+  NationalIdNFT: "0xd8bf551a8942cbacab7888444d67cb5cd1212803" as `0x${string}`,
   LandOwnershipNFT:
-    "0xdfaf754cc95a9060bd6e467a652f9642e9e33c26" as `0x${string}`,
+    "0x7a92bc6623a98c272d69fc615d8483280370401c" as `0x${string}`,
   LandTransferContract:
-    "0xecc7d23c7d82bbaf59cd0b40329d24fd42617467" as `0x${string}`,
+    "0xe8d3510b1938b7bd91bf9c1fc86f7af24e9bab83" as `0x${string}`,
 } as const;
 
 // Full contract configs for wagmi
