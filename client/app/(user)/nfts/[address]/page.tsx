@@ -581,75 +581,271 @@ Verified: ${nft.verified}
           </Card>
         </motion.div>
 
-        {/* Document Uploads Section - Only visible to owner */}
-        {nft.decryptedMetadata?.files &&
-          nft.decryptedMetadata.files.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
+        {/* Decrypted Metadata Section - Only visible to owner */}
+        {nft.decryptedMetadata && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="space-y-6"
+          >
+            {/* Decrypted Personal Data Fields */}
+            {(nft.decryptedMetadata.nationalIdData ||
+              nft.decryptedMetadata.landTitleData ||
+              nft.decryptedMetadata.decryptedFields) && (
               <Card className="bg-surface-75 rounded-xl border-border/40">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <FileText className="w-5 h-5 text-[#3ECF8E]" />
-                    Document Uploads
+                    <Shield className="w-5 h-5 text-[#3ECF8E]" />
+                    {nft.type === "National ID"
+                      ? "National ID Information"
+                      : "Land Title Information"}
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Encrypted files stored securely on IPFS
+                    Decrypted data from on-chain metadata
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {nft.decryptedMetadata.files.map(
-                    (file: any, index: number) => {
-                      const isImage =
-                        file.mime?.startsWith("image/") ||
-                        file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-
-                      return (
-                        <div key={index} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">
-                              {file.filename || `File ${index + 1}`}
-                            </span>
-                            {file.size && (
-                              <span className="text-xs text-muted-foreground">
-                                {(file.size / 1024).toFixed(2)} KB
-                              </span>
-                            )}
-                          </div>
-                          {isImage ? (
-                            <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
-                              <img
-                                src={file.decryptedUrl}
-                                alt={file.filename || `Image ${index + 1}`}
-                                className="w-full h-auto max-h-[400px] object-contain"
-                              />
+                  {/* National ID Data */}
+                  {nft.type === "National ID" &&
+                    nft.decryptedMetadata.nationalIdData && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {nft.decryptedMetadata.nationalIdData.firstName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              First Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.nationalIdData.firstName}
                             </div>
-                          ) : (
-                            <a
-                              href={file.decryptedUrl}
-                              download={file.filename}
-                              className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border/40 bg-surface-200 hover:bg-surface-300 transition-colors"
-                            >
-                              <FileText className="w-4 h-4" />
-                              <span className="text-sm">View</span>
-                            </a>
-                          )}
-                          {index < nft.decryptedMetadata.files.length - 1 && (
-                            <Separator className="bg-border/40" />
-                          )}
-                        </div>
-                      );
-                    }
-                  )}
-                  <p className="text-xs text-muted-foreground mt-4">
-                    Accepted formats: JPG, PNG (Max 5MB)
-                  </p>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.nationalIdData.lastName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Last Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.nationalIdData.lastName}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.nationalIdData.middleName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Middle Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.nationalIdData.middleName}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.nationalIdData.idNumber && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              ID Number
+                            </label>
+                            <div className="text-sm font-mono">
+                              {nft.decryptedMetadata.nationalIdData.idNumber}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.nationalIdData.issueDate && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Issue Date
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.nationalIdData.issueDate}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.nationalIdData.expiryDate && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Expiry Date
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.nationalIdData.expiryDate}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  {/* Land Title Data */}
+                  {nft.type === "Land Title" &&
+                    nft.decryptedMetadata.landTitleData && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {nft.decryptedMetadata.landTitleData.firstName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              First Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.firstName}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.lastName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Last Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.lastName}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.middleName && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Middle Name
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.middleName}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.titleNumber && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Title Number
+                            </label>
+                            <div className="text-sm font-mono">
+                              {nft.decryptedMetadata.landTitleData.titleNumber}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.latitude && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Latitude
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.latitude}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.longitude && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Longitude
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.longitude}
+                            </div>
+                          </div>
+                        )}
+                        {nft.decryptedMetadata.landTitleData.lotArea && (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Lot Area (sqm)
+                            </label>
+                            <div className="text-sm font-medium">
+                              {nft.decryptedMetadata.landTitleData.lotArea}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  {/* Generic Decrypted Fields (fallback) */}
+                  {!nft.decryptedMetadata.nationalIdData &&
+                    !nft.decryptedMetadata.landTitleData &&
+                    nft.decryptedMetadata.decryptedFields && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {Object.entries(
+                          nft.decryptedMetadata.decryptedFields
+                        ).map(([key, value]) => (
+                          <div key={key} className="space-y-1">
+                            <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                              {key.replace(/([A-Z])/g, " $1").trim()}
+                            </label>
+                            <div className="text-sm font-medium">
+                              {String(value || "N/A")}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                 </CardContent>
               </Card>
-            </motion.div>
-          )}
+            )}
+
+            {/* Document Uploads */}
+            {(nft.decryptedMetadata.decryptedFiles ||
+              nft.decryptedMetadata.files) &&
+              (nft.decryptedMetadata.decryptedFiles ||
+                nft.decryptedMetadata.files
+              ).length > 0 && (
+                <Card className="bg-surface-75 rounded-xl border-border/40">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <FileText className="w-5 h-5 text-[#3ECF8E]" />
+                      Document Uploads
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Encrypted files stored securely on IPFS
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {(
+                      nft.decryptedMetadata.decryptedFiles ||
+                      nft.decryptedMetadata.files
+                    ).map(
+                      (file: any, index: number) => {
+                        const isImage =
+                          file.mime?.startsWith("image/") ||
+                          file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+                        return (
+                          <div key={index} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">
+                                {file.filename || `File ${index + 1}`}
+                              </span>
+                              {file.size && (
+                                <span className="text-xs text-muted-foreground">
+                                  {(file.size / 1024).toFixed(2)} KB
+                                </span>
+                              )}
+                            </div>
+                            {isImage ? (
+                              <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
+                                <img
+                                  src={file.decryptedUrl}
+                                  alt={file.filename || `Image ${index + 1}`}
+                                  className="w-full h-auto max-h-[400px] object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <a
+                                href={file.decryptedUrl}
+                                download={file.filename}
+                                className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border/40 bg-surface-200 hover:bg-surface-300 transition-colors"
+                              >
+                                <FileText className="w-4 h-4" />
+                                <span className="text-sm">View</span>
+                              </a>
+                            )}
+                            {index <
+                              (nft.decryptedMetadata.decryptedFiles ||
+                                nft.decryptedMetadata.files
+                              ).length -
+                                1 && <Separator className="bg-border/40" />}
+                          </div>
+                        );
+                      }
+                    )}
+                    <p className="text-xs text-muted-foreground mt-4">
+                      Accepted formats: JPG, PNG (Max 5MB)
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+          </motion.div>
+        )}
 
         {/* Transaction Timeline */}
         <motion.div
