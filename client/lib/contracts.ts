@@ -1,6 +1,6 @@
 /**
  * Smart Contract Configuration
- * Deployed on Base Sepolia - October 15, 2025
+ * Deployed on Base Sepolia - October 17, 2025
  */
 
 import NationalIdNFTData from "@/src/abis/NationalIdNFT.json";
@@ -10,11 +10,11 @@ import { baseSepolia } from "viem/chains";
 
 // Contract addresses - deployed on Base Sepolia
 export const CONTRACT_ADDRESSES = {
-  NationalIdNFT: "0xd8bf551a8942cbacab7888444d67cb5cd1212803" as `0x${string}`,
+  NationalIdNFT: "0x66fe865e6a737fd58905d2f46d2e952a5633bf4d" as `0x${string}`,
   LandOwnershipNFT:
-    "0x7a92bc6623a98c272d69fc615d8483280370401c" as `0x${string}`,
+    "0x5a93b0d7a0e05396f2a4d830ac9bbc4d896ce0ff" as `0x${string}`,
   LandTransferContract:
-    "0xe8d3510b1938b7bd91bf9c1fc86f7af24e9bab83" as `0x${string}`,
+    "0x9a46b9f558d9dad1973095d0ab3c7c07d1055e0c" as `0x${string}`,
 } as const;
 
 // Full contract configs for wagmi

@@ -103,8 +103,8 @@ contract LandTransferContract is Ownable {
     // ============ Transfer Functions ============
     
     /**
-     * @notice Initiate a FREE land transfer - only needs recipient wallet
-     * @dev Creates a transfer request and locks the token
+     * @notice Initiate and immediately complete a FREE land transfer
+     * @dev Transfers NFT directly from caller to buyer - no admin approval needed
      */
     function initiateTransfer(
         uint256 tokenId,
@@ -124,76 +124,46 @@ contract LandTransferContract is Ownable {
         
         uint256 transferId = _transferIdCounter++;
         
+        // Create transfer record as completed
         transferRequests[transferId] = TransferRequest({
             tokenId: tokenId,
             seller: msg.sender,
             buyer: buyer,
-            status: TransferStatus.Pending,
+            status: TransferStatus.Completed,
             createdAt: block.timestamp,
             legalDocumentCid: legalDocumentCid
         });
         
-        activeTransfers[tokenId] = transferId;
-        
         emit TransferInitiated(transferId, tokenId, msg.sender, buyer);
         
-        return transferId;
-    }
-    
-    /**
-     * @notice Complete the transfer (called by owner/admin after verification)
-     * @dev Transfers NFT from seller to buyer - NO PAYMENT INVOLVED
-     */
-    function completeTransfer(uint256 transferId) external onlyOwner {
-        TransferRequest storage transfer = transferRequests[transferId];
-        
-        if (transfer.seller == address(0)) revert TransferNotFound();
-        if (transfer.status != TransferStatus.Pending) revert TransferNotPending();
-        
-        // Mark as completed
-        transfer.status = TransferStatus.Completed;
-        activeTransfers[transfer.tokenId] = 0;
-        
-        // Transfer NFT (no payment involved)
+        // Immediately transfer NFT (no payment involved)
         (bool nftSuccess, ) = landOwnershipNFT.call(
             abi.encodeWithSignature(
                 "authorizedTransfer(address,address,uint256)",
-                transfer.seller,
-                transfer.buyer,
-                transfer.tokenId
+                msg.sender,
+                buyer,
+                tokenId
             )
         );
         if (!nftSuccess) revert TransferFailed();
         
-        emit TransferCompleted(
-            transferId,
-            transfer.tokenId,
-            transfer.seller,
-            transfer.buyer
-        );
+        emit TransferCompleted(transferId, tokenId, msg.sender, buyer);
+        
+        return transferId;
     }
     
+    
     /**
-     * @notice Cancel a transfer
+     * @notice Cancel a transfer (deprecated - transfers are now instant)
+     * @dev Kept for backwards compatibility but has no effect since transfers complete immediately
      */
-    function cancelTransfer(uint256 transferId) external {
+    function cancelTransfer(uint256 transferId) external view {
         TransferRequest storage transfer = transferRequests[transferId];
         
         if (transfer.seller == address(0)) revert TransferNotFound();
-        if (transfer.status != TransferStatus.Pending) revert TransferNotPending();
         
-        // Only seller, buyer, or owner can cancel
-        bool authorized = msg.sender == transfer.seller ||
-                         msg.sender == transfer.buyer ||
-                         msg.sender == owner();
-        
-        if (!authorized) revert UnauthorizedCaller();
-        
-        // Mark as cancelled
-        transfer.status = TransferStatus.Cancelled;
-        activeTransfers[transfer.tokenId] = 0;
-        
-        emit TransferCancelled(transferId, transfer.tokenId, msg.sender);
+        // Since transfers are instant and already completed, cancellation not possible
+        revert TransferNotPending();
     }
     
     // ============ View Functions ============

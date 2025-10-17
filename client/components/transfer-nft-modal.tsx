@@ -20,8 +20,11 @@ import {
   Wallet,
   Fuel,
   Network,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTransferNFT } from "@/hooks/useTransferNFT";
+import { baseSepolia } from "viem/chains";
 
 interface NFTDocument {
   id: string;
@@ -51,11 +54,14 @@ export function TransferNFTModal({
   const [isValidAddress, setIsValidAddress] = useState<boolean | null>(null);
   const [addressesMatch, setAddressesMatch] = useState<boolean | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isTransferring, setIsTransferring] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Use the transfer hook
+  const { transferNFT, isTransferring, isConfirmed, hash, error } =
+    useTransferNFT();
+
   // Estimated gas fee (mock data - replace with actual blockchain call)
-  const [estimatedGas, setEstimatedGas] = useState("0.0025 ETH");
+  const [estimatedGas, setEstimatedGas] = useState("~0.0001 ETH");
 
   // Reset form when modal closes
   useEffect(() => {
@@ -67,7 +73,6 @@ export function TransferNFTModal({
         setIsValidAddress(null);
         setAddressesMatch(null);
         setShowConfirmation(false);
-        setIsTransferring(false);
         setIsSuccess(false);
       }, 300);
     }
@@ -117,25 +122,38 @@ export function TransferNFTModal({
   };
 
   const handleSendTransfer = async () => {
-    setIsTransferring(true);
-
     try {
-      // TODO: Replace with actual blockchain transfer call
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await transferNFT(nft.tokenId, recipientAddress as `0x${string}`, note);
+      // Success will be handled by useEffect watching isConfirmed
+    } catch (error) {
+      console.error("Transfer error:", error);
+      // Error toast is handled by the hook
+    }
+  };
 
+  // Watch for transfer confirmation
+  useEffect(() => {
+    if (isConfirmed && hash) {
       setIsSuccess(true);
       toast.success("NFT transferred successfully!");
-
+      
       // Close modal after success
       setTimeout(() => {
         onClose();
+        // Refresh the page to show updated NFT ownership
+        window.location.reload();
       }, 2000);
-    } catch (error) {
-      console.error("Transfer error:", error);
-      toast.error("Transfer failed. Please try again.");
-      setIsTransferring(false);
     }
-  };
+  }, [isConfirmed, hash, onClose]);
+
+  // Show error toast if transfer fails
+  useEffect(() => {
+    if (error) {
+      toast.error(
+        error.message || "Transfer failed. Please try again."
+      );
+    }
+  }, [error]);
 
   const handleClose = () => {
     if (isTransferring) return;
@@ -581,6 +599,37 @@ export function TransferNFTModal({
                         <p className="text-sm text-muted-foreground mb-6">
                           Your NFT has been transferred to the recipient.
                         </p>
+                        
+                        {hash && (
+                          <div className="mb-6 p-4 bg-surface-75/50 rounded-lg border border-border/40">
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Transaction Hash
+                            </p>
+                            <div className="flex items-center gap-2 justify-center">
+                              <code className="text-xs font-mono">
+                                {hash.slice(0, 10)}...{hash.slice(-8)}
+                              </code>
+                              <Button
+                                onClick={() => handleCopyAddress(hash, "Transaction hash")}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <a
+                              href={`https://sepolia.basescan.org/tx/${hash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-[#3ECF8E] hover:underline mt-2"
+                            >
+                              View on BaseScan
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+                        
                         <Button
                           onClick={handleClose}
                           size="lg"
