@@ -8,19 +8,19 @@ This Express server handles:
 
 - Document request submissions
 - Admin verification
-- **NFT minting** (National ID and Land Ownership)
-- **Request deletion after minting** (data moves to blockchain)
+- **Request management** (National ID and Land Ownership)
+- **Metadata preparation** for client-side minting
 
 ## Key Concept
 
-**Once an NFT is minted, the request is DELETED from the database.**
+**Users mint NFTs directly from their wallets (client-side minting).**
 
-The data no longer lives in MongoDB—it lives on the blockchain as NFT metadata. This ensures:
+The backend provides metadata and approval status, but users control the minting transaction:
 
-- ✅ Single source of truth (blockchain)
-- ✅ No data duplication
-- ✅ Privacy (encrypted metadata on-chain)
-- ✅ Immutability
+- ✅ Users pay their own gas fees
+- ✅ Fully decentralized minting process
+- ✅ Users sign transactions with their wallets
+- ✅ Metadata prepared and stored via IPFS
 
 ## Setup
 
@@ -62,7 +62,7 @@ LAND_OWNERSHIP_NFT_ADDRESS=0x...
 LAND_TRANSFER_CONTRACT_ADDRESS=0x...
 ```
 
-**Important:** The `ADMIN_PRIVATE_KEY` wallet must have Base Sepolia ETH for gas fees.
+**Important:** The `ADMIN_PRIVATE_KEY` is optional and only needed for specific admin operations (not for minting). Users pay their own gas fees when minting NFTs from their wallets.
 
 ### 4. Run the Server
 
@@ -108,23 +108,26 @@ Content-Type: application/json
 
 Status: `verified` → User can now mint
 
-#### 3. User Mints NFT
+#### 3. User Mints NFT (Client-Side)
 
-```http
-POST /api/requests/:requestId/mint
-Content-Type: application/json
+**Frontend calls:**
 
-{
-  "userWalletAddress": "0x..."
-}
+```typescript
+// User's wallet signs and sends transaction
+const { hash } = await writeContract({
+  address: contractAddress,
+  abi: contractABI,
+  functionName: "mint",
+  args: [metadataURI],
+});
 ```
 
 **What happens:**
 
-1. ✅ Backend mints NFT on blockchain
-2. ✅ Metadata stored on-chain
-3. ✅ Request DELETED from database
-4. ✅ Returns transaction hash and token ID
+1. ✅ User approves transaction in their wallet
+2. ✅ User pays gas fee from their wallet
+3. ✅ NFT minted directly to user's wallet
+4. ✅ Metadata stored on-chain via IPFS
 
 Response:
 
@@ -178,13 +181,13 @@ User submits → MongoDB stores request
 ### After Minting
 
 ```
-User clicks mint → Backend mints NFT
+User clicks mint → User's wallet prompts approval
                          ↓
-                 Metadata on blockchain
+                 User pays gas fee
                          ↓
-              Request DELETED from MongoDB
+              NFT minted to user's wallet
                          ↓
-            User sees NFT in wallet
+            Metadata stored on blockchain
 ```
 
 ### Data Flow

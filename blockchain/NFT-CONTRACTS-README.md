@@ -308,9 +308,9 @@ Run specific test:
 npx hardhat test test/NationalIdNFT.ts
 ```
 
-## Integration with Backend
+## Integration with Frontend
 
-### Server-side Minting Flow
+### Client-side Minting Flow
 
 1. **User submits verification request**
 
@@ -335,39 +335,42 @@ npx hardhat test test/NationalIdNFT.ts
    }
    ```
 
-4. **Backend mints NFT**
+4. **User mints NFT from their wallet**
 
    ```typescript
-   if (requestType === "national_id") {
-     await nationalIdNFT.mintNationalId([...]);
-   } else {
-     await landOwnershipNFT.mintLandOwnership([...]);
-   }
+   // Frontend (useClientMint hook)
+   const { hash } = await writeContract({
+     address:
+       requestType === "national_id"
+         ? NATIONAL_ID_NFT_ADDRESS
+         : LAND_OWNERSHIP_NFT_ADDRESS,
+     abi: contractABI,
+     functionName: "mint",
+     args: [metadataURI],
+   });
+   // User approves transaction and pays gas
    ```
 
-5. **Update database with tokenId**
+5. **User receives NFT in their wallet**
    ```typescript
-   await db.requests.update({
-     _id: requestId,
-     tokenId: result.tokenId,
-     txHash: result.hash,
-   });
+   // NFT is now owned by user
+   // Transaction hash and tokenId recorded
    ```
 
 ### Environment Variables
 
-Add to your `.env`:
+Add to your client `.env.local`:
 
 ```bash
 # Contract Addresses (after deployment)
-NATIONAL_ID_NFT_ADDRESS=0x...
-LAND_OWNERSHIP_NFT_ADDRESS=0x...
+NEXT_PUBLIC_NATIONAL_ID_NFT_ADDRESS=0x...
+NEXT_PUBLIC_LAND_OWNERSHIP_NFT_ADDRESS=0x...
 
-# Backend wallet (has owner role)
-BACKEND_WALLET_PRIVATE_KEY=0x...
+# Backend API
+NEXT_PUBLIC_API_URL=http://localhost:6969
 
-# RPC
-BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+# Note: Users pay gas fees from their own wallets
+# No backend private key needed for minting
 ```
 
 ## Recommendations
@@ -387,8 +390,9 @@ BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
 **Option 1: Authorized Contract Transfer (Current)**
 
 - ✅ Regulated transfers through smart contract
-- ✅ Can implement escrow, payment, legal checks
+- ✅ Can implement legal document tracking
 - ✅ Prevents unauthorized transfers
+- ✅ FREE instant transfers
 - ❌ Requires additional transfer contract
 - ✅ **Recommended for real estate/legal compliance**
 

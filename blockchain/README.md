@@ -8,7 +8,7 @@ This project contains three interconnected smart contracts for managing identity
 
 1. **NationalIdNFT** - Soul-bound identity verification NFTs (non-transferable)
 2. **LandOwnershipNFT** - Property ownership NFTs (controlled transfers)
-3. **LandTransferContract** - Escrow and transfer management system
+3. **LandTransferContract** - Instant authorized transfer system (FREE)
 
 ## 📁 Project Structure
 
@@ -17,7 +17,7 @@ blockchain/
 ├── contracts/
 │   ├── NationalIdNFT.sol          # Soul-bound identity NFTs
 │   ├── LandOwnershipNFT.sol       # Property ownership NFTs
-│   └── LandTransferContract.sol   # Transfer escrow system
+│   └── LandTransferContract.sol   # Instant transfer system
 ├── scripts/
 │   └── deployNFTs.ts              # Unified deployment script
 ├── ignition/
@@ -95,16 +95,16 @@ Deployment automatically:
 
 ### LandTransferContract
 
-**Purpose:** Escrow and regulated transfer management
+**Purpose:** Authorized instant transfer management (FREE)
 
 **Key Features:**
 
-- ✅ Secure escrow system
-- ✅ Fee collection (default 2.5%)
+- ✅ FREE instant transfers
+- ✅ No payment or fees required
 - ✅ Legal document linking (IPFS)
-- ✅ Time-limited transfers
-- ✅ Multi-party cancellation
-- ✅ Automatic refunds
+- ✅ Simple one-step process
+- ✅ Authorized transfers only
+- ✅ Immediate completion
 
 **Use Case:** Regulated land sales, property transfers
 
@@ -237,18 +237,18 @@ The project includes comprehensive tests for:
 
 - ✅ NFT minting
 - ✅ Transfer restrictions
-- ✅ Escrow functionality
-- ✅ Fee calculations
+- ✅ Instant transfer functionality
+- ✅ Authorization checks
 - ✅ Access control
 - ✅ Edge cases
 
 ## 🚨 Security
 
 - **Audited patterns** - Uses OpenZeppelin standards
-- **Reentrancy protection** - ReentrancyGuard on all state changes
 - **Access control** - Role-based permissions
-- **Fund safety** - Automatic escrow refunds
-- **NFT protection** - Transfer locks during active transfers
+- **Ownership verification** - Only NFT owners can initiate transfers
+- **Authorized transfers** - Only this contract can transfer LandOwnershipNFTs
+- **Legal audit trail** - IPFS document linking for compliance
 
 ## 📖 Additional Resources
 
