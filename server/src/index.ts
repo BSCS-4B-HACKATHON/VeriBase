@@ -52,4 +52,27 @@ app.get("/", (_req, res) => {
 
 app.listen(process.env.PORT || 6969, () => {
   console.log(`Server is running on port ${process.env.PORT || 6969}`);
+
+  if (process.env.NODE_ENV === "production") {
+    const PING_INTERVAL = 14 * 60 * 1000;
+    const SERVER_URL =
+      process.env.SERVER_URL || `http://localhost:${process.env.PORT || 6969}`;
+
+    setInterval(async () => {
+      try {
+        const response = await fetch(`${SERVER_URL}/`);
+        console.log(
+          `[Keep-Alive] Pinged server at ${new Date().toISOString()} - Status: ${
+            response.status
+          }`
+        );
+      } catch (error) {
+        console.error("[Keep-Alive] Ping failed:", error);
+      }
+    }, PING_INTERVAL);
+
+    console.log(
+      `[Keep-Alive] Started self-ping every ${PING_INTERVAL / 60000} minutes`
+    );
+  }
 });
