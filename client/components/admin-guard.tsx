@@ -14,20 +14,20 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isConnected, isConnecting } = useAccount();
   const router = useRouter();
   const [hasChecked, setHasChecked] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
-  // Give wallet time to reconnect on mount
+  // Wait for wallet reconnection to have time to start
   useEffect(() => {
     const timer = setTimeout(() => {
-      setIsInitializing(false);
-    }, 1000); // Wait 1 second for wallet reconnection
+      setIsReady(true);
+    }, 1500); // Give reconnection enough time to start, even on slow connections
 
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    // Wait for initialization, wallet connection, and admin check to complete
-    if (!isInitializing && !isConnecting && !isLoading) {
+    // Only check after initial delay, when not connecting, and admin check complete
+    if (isReady && !isConnecting && !isLoading) {
       setHasChecked(true);
       // Only redirect if wallet is connected but user is not admin
       if (isConnected && !isAdmin) {
@@ -38,16 +38,16 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
         router.replace("/");
       }
     }
-  }, [isAdmin, isLoading, isConnected, isConnecting, isInitializing, router]);
+  }, [isAdmin, isLoading, isConnected, isConnecting, isReady, router]);
 
   // Show loading while initializing, wallet is connecting, or checking admin status
-  if (isInitializing || isConnecting || isLoading || !hasChecked) {
+  if (!isReady || isConnecting || isLoading || !hasChecked) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">
-            {isConnecting || isInitializing
+            {isConnecting
               ? "Connecting wallet..."
               : "Verifying admin access..."}
           </p>
