@@ -50,10 +50,6 @@ export default function ConnectWallet() {
     }
   };
 
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
   return (
     <div className="flex items-center gap-3">
       {isConnected && address ? (

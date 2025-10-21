@@ -18,9 +18,6 @@ export async function sha256Hex(buf: ArrayBuffer) {
 function toBase64(u8: Uint8Array) {
   return btoa(String.fromCharCode(...u8));
 }
-function fromBase64(s: string) {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-}
 
 export async function genAesKey() {
   return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
@@ -101,7 +98,6 @@ export async function encryptField(key: CryptoKey, value: string) {
  * then POST metadata bytes to backend which pins to Pinata and returns CID.
  */
 export async function buildAndUploadMetadata({
-  aesKey,
   encryptedFields,
   filesMeta,
   signerAddress,
@@ -110,14 +106,14 @@ export async function buildAndUploadMetadata({
 }: {
   aesKey: CryptoKey;
   encryptedFields: Record<string, { ciphertextBase64: string; iv: string }>;
-  filesMeta: Array<any>;
+  filesMeta: Array<Record<string, unknown>>;
   signerAddress: string;
   signWithViemWalletClient?: {
     signMessage: (args: { message: Uint8Array | string }) => Promise<string>;
   } | null;
   serverWrappedAesKey?: string;
 }) {
-  const metadata: any = {
+  const metadata: Record<string, unknown> = {
     version: "1",
     encryptedFields,
     files: filesMeta,
@@ -141,9 +137,30 @@ export async function buildAndUploadMetadata({
   ) {
     signature = await signWithViemWalletClient.signMessage({
       message: metadataHash,
-    } as any);
-  } else if ((window as any).ethereum) {
-    signature = await (window as any).ethereum.request({
+    });
+  } else if (
+    typeof window !== "undefined" &&
+    (
+      window as {
+        ethereum?: {
+          request: (args: {
+            method: string;
+            params: unknown[];
+          }) => Promise<string>;
+        };
+      }
+    ).ethereum
+  ) {
+    signature = await (
+      window as {
+        ethereum: {
+          request: (args: {
+            method: string;
+            params: unknown[];
+          }) => Promise<string>;
+        };
+      }
+    ).ethereum.request({
       method: "personal_sign",
       params: [metadataHash, signerAddress],
     });
@@ -179,7 +196,10 @@ export async function buildAndUploadMetadata({
 
 // walletClient: your connected viem WalletClient instance
 export async function signMetadataWithViem(
-  walletClient: any,
+  walletClient: {
+    getAddresses?: () => Promise<string[] | string>;
+    signMessage: (args: { message: string }) => Promise<string>;
+  },
   metadataHash: string
 ): Promise<{ signerAddress: string; signature: string }> {
   // get the connected address from your app state / connector (example assumes you already have it)
@@ -281,9 +301,27 @@ export async function wrapAesKeyForServer(
   return toBase64(new Uint8Array(wrapped));
 }
 
-export function findFileUrl(files: any[] | undefined, keywords: string[]) {
+export interface FileWithMeta extends Record<string, unknown> {
+  purpose?: string;
+  filename?: string;
+  cid?: string;
+  decryptedUrl?: string;
+  tag?: string;
+  meta?: {
+    purpose?: string;
+    tag?: string;
+    filename?: string;
+    name?: string;
+    url?: string;
+  };
+}
+
+export function findFileUrl(
+  files: FileWithMeta[] | undefined,
+  keywords: string[]
+) {
   if (!Array.isArray(files) || files.length === 0) return null;
-  const lower = (s?: any) => (s ? String(s).toLowerCase() : "");
+  const lower = (s?: unknown) => (s ? String(s).toLowerCase() : "");
 
   // 1) exact purpose/purpose in meta/tag
   for (const f of files) {
@@ -306,6 +344,6 @@ export function findFileUrl(files: any[] | undefined, keywords: string[]) {
   }
 
   // 3) fallback to first decryptedUrl if any
-  const any = files.find((f) => f.decryptedUrl);
-  return any ? any.decryptedUrl : null;
+  const firstWithUrl = files.find((f) => f.decryptedUrl);
+  return firstWithUrl ? firstWithUrl.decryptedUrl : null;
 }

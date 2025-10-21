@@ -15,17 +15,12 @@ import {
   Wallet,
   MapPin,
   Download,
-  ExternalLink,
   Image as ImageIcon,
   Edit3,
   Send,
-  Search,
-  Flag,
   Hash,
   Shield,
-  Link as LinkIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -47,7 +42,6 @@ import {
   fetchAdminRequestById,
   approveRequest,
   rejectRequest,
-  type DetailedAdminRequest,
 } from "@/lib/admin-api";
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
@@ -90,14 +84,18 @@ interface ExtendedRequest extends VerificationRequest {
     timestamp: string;
     by: string;
     remarks?: string;
-    icon: any;
+    icon: React.ComponentType<{ className?: string }>;
   }>;
 }
 
 function getStatusBadge(status: VerificationStatus) {
   const variants: Record<
     VerificationStatus,
-    { className: string; label: string; icon: any }
+    {
+      className: string;
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+    }
   > = {
     verified: {
       className:
@@ -146,7 +144,7 @@ export default function RequestDetailsPage() {
   const [request, setRequest] = useState<ExtendedRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [adminRemarks, setAdminRemarks] = useState("");
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [_previewImage, setPreviewImage] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   useEffect(() => {
@@ -266,6 +264,7 @@ export default function RequestDetailsPage() {
       }
     } catch (error) {
       toast.error("Failed to approve request");
+      console.error("Approve error:", error);
     }
   };
 
@@ -287,6 +286,7 @@ export default function RequestDetailsPage() {
       }
     } catch (error) {
       toast.error("Failed to reject request");
+      console.error("Reject error:", error);
     }
   };
 
@@ -328,7 +328,8 @@ export default function RequestDetailsPage() {
             <XCircle className="w-16 h-16 text-red-500 mx-auto" />
             <h2 className="text-xl font-bold">Request Not Found</h2>
             <p className="text-muted-foreground">
-              The verification request you're looking for doesn't exist.
+              The verification request you&apos;re looking for doesn&apos;t
+              exist.
             </p>
             <Button
               onClick={() => router.push("/admin/requests")}

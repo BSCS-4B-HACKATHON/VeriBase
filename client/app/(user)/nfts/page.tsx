@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useWallet } from "@/hooks/useWallet";
-import { useUserNFTs, type NFTDocument } from "@/hooks/useUserNFTs";
+import {
+  useUserNFTs,
+  type NFTDocument,
+  type DecryptedFile,
+} from "@/hooks/useUserNFTs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,10 +38,9 @@ import { toast } from "sonner";
 
 export default function NFTsPage() {
   const router = useRouter();
-  const { address } = useWallet();
   const { nfts, isLoading, refetch } = useUserNFTs();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedNFT, setSelectedNFT] = useState<NFTDocument | null>(null);
+  const [selectedNFT] = useState<NFTDocument | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   // Refresh NFTs
@@ -47,7 +49,7 @@ export default function NFTsPage() {
     try {
       await refetch();
       toast.success("NFT list refreshed");
-    } catch (error) {
+    } catch {
       toast.error("Failed to refresh NFTs");
     } finally {
       setIsRefreshing(false);
@@ -148,8 +150,8 @@ export default function NFTsPage() {
                   No NFT Documents yet
                 </h3>
                 <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                  Once your verifications are approved, they'll appear here as
-                  blockchain-backed proof of ownership.
+                  Once your verifications are approved, they&apos;ll appear here
+                  as blockchain-backed proof of ownership.
                 </p>
                 <Button
                   asChild
@@ -425,7 +427,7 @@ export default function NFTsPage() {
                           0 && (
                           <div className="space-y-4">
                             {selectedNFT.decryptedMetadata.decryptedFiles.map(
-                              (file: any, index: number) => {
+                              (file: DecryptedFile, index: number) => {
                                 const isImage =
                                   file.mime?.startsWith("image/") ||
                                   file.filename?.match(

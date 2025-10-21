@@ -4,7 +4,6 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "./providers";
-import { Footer } from "./(public)/_components/footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

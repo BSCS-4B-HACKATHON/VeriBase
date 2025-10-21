@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RequestType } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
-import { getAllUsersMintRequests, shorten } from "@/lib/helpers";
+import { getAllUsersMintRequests } from "@/lib/helpers";
 import { useWallet } from "@/hooks/useWallet";
 import RequestCard from "@/components/request-card";
 import RequestCardSkeleton from "@/components/request-card-skeleton";

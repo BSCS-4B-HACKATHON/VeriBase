@@ -73,7 +73,7 @@ export function FAQSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           viewport={{ once: true }}
         >
-          Questions? We've got{" "}
+          Questions? We&apos;ve got{" "}
           <span className="bg-gradient-to-b from-foreground via-emerald-200 to-primary bg-clip-text text-transparent">
             answers
           </span>

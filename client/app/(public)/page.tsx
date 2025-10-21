@@ -1,10 +1,8 @@
-import Image from "next/image";
 import Navbar from "./_components/navbar";
 import Hero from "./_components/hero";
 import Features from "./_components/features";
 import WhyNotVeriBaseSection from "./_components/why-not-veribase";
 import Pricing from "./_components/pricing";
-import { Footer } from "./_components/footer";
 import { FAQSection } from "./_components/faq-sections";
 
 export default function Home() {

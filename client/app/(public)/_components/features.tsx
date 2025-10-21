@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, FileCheck, Lock, Search, Zap } from "lucide-react";
+import { FileCheck, Lock, Search, Zap } from "lucide-react";
 import { WobbleCard } from "@/components/ui/wobble-card";
 import { motion } from "framer-motion";
 

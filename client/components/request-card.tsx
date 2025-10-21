@@ -1,7 +1,19 @@
 import { shorten } from "@/lib/helpers";
 import { RequestType } from "@/lib/types";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, Copy, Loader, MoreHorizontal, Eye, Trash2, Home, IdCard, Calendar, User, AlertTriangle } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Loader,
+  MoreHorizontal,
+  Eye,
+  Trash2,
+  Home,
+  IdCard,
+  Calendar,
+  User,
+  AlertTriangle,
+} from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -17,7 +29,6 @@ import { motion } from "motion/react";
 
 export default function RequestCard({
   request,
-  onClick,
 }: {
   request: RequestType;
   onClick: () => void;
@@ -26,7 +37,7 @@ export default function RequestCard({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedAssetId, setCopiedAssetId] = useState(false);
   const [copiedWallet, setCopiedWallet] = useState(false);
-  const { mintNFT, isMinting, switchToBaseSepolia, isWrongNetwork } = useClientMint();
+  const { mintNFT, isMinting, switchToBaseSepolia } = useClientMint();
   const { isConnected, chain, address } = useAccount();
 
   // Check if user already has a National ID NFT (only for national_id requests)
@@ -50,6 +61,7 @@ export default function RequestCard({
       }
     } catch (err) {
       toast.error("Failed to copy to clipboard");
+      console.error("Clipboard copy failed:", err);
     }
   };
 
@@ -112,7 +124,8 @@ export default function RequestCard({
     if (alreadyHasNFT) {
       console.log("❌ Already has National ID NFT");
       toast.error("You already have a National ID NFT", {
-        description: "Each wallet can only have one National ID. Try using a different wallet.",
+        description:
+          "Each wallet can only have one National ID. Try using a different wallet.",
       });
       return;
     }
@@ -125,8 +138,8 @@ export default function RequestCard({
         await switchToBaseSepolia();
         toast.success("Switched to Base Sepolia!");
         // Small delay to let the network switch settle
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (switchError: any) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } catch (switchError) {
         console.error("❌ Network switch failed:", switchError);
         toast.error("Please switch to Base Sepolia in your wallet manually");
         return;
@@ -164,20 +177,20 @@ export default function RequestCard({
           description: result.error || "Please try again",
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("mint failed", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Please try again later";
       toast.error("Failed to mint NFT", {
-        description: err.message || "Please try again later",
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isPending = String(request.status).toLowerCase() === "pending";
   const isRejected = String(request.status).toLowerCase() === "rejected";
   const isLandTitle = request.requestType === "land_ownership";
-  const isNationalId = request.requestType === "national_id";
 
   // Define document type configurations
   const docConfig = isLandTitle
@@ -211,7 +224,9 @@ export default function RequestCard({
       transition={{ duration: 0.3 }}
       whileHover={{ y: -4 }}
     >
-      <Card className={`group rounded-2xl ${docConfig.borderAccent} border-muted/40 bg-gradient-to-br ${docConfig.bgGradient} hover:shadow-xl ${docConfig.hoverShadow} transition-all duration-300 cursor-pointer overflow-visible flex flex-col h-full`}>
+      <Card
+        className={`group rounded-2xl ${docConfig.borderAccent} border-muted/40 bg-gradient-to-br ${docConfig.bgGradient} hover:shadow-xl ${docConfig.hoverShadow} transition-all duration-300 cursor-pointer overflow-visible flex flex-col h-full`}
+      >
         <CardHeader className="pb-3 pt-5">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-3">
@@ -219,7 +234,9 @@ export default function RequestCard({
                 <DocIcon className={`h-5 w-5 ${docConfig.iconColor}`} />
               </div>
               <div>
-                <span className={`text-sm font-bold ${docConfig.iconColor} tracking-wide`}>
+                <span
+                  className={`text-sm font-bold ${docConfig.iconColor} tracking-wide`}
+                >
                   {docConfig.label}
                 </span>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -231,194 +248,196 @@ export default function RequestCard({
           </div>
         </CardHeader>
 
-      {/* let content grow so footer sticks to bottom */}
-      <CardContent className="space-y-4 pb-4 flex-1">
-        {/* Request ID with enhanced styling */}
-        <div className="bg-surface-100 rounded-lg p-3 border border-surface-300">
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Request ID
-            </p>
-          </div>
-          <div className="flex items-center gap-2 group/copy">
-            <p className="font-mono text-sm font-semibold text-foreground truncate">
-              {shorten(request.requestId)}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard(request.requestId, "asset");
-              }}
-            >
-              {copiedAssetId ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Requester Info with icon */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Requester
-            </p>
-          </div>
-          <div className="flex items-center gap-2 group/copy pl-1">
-            <p className="font-mono text-sm text-foreground font-medium">
-              {shorten(request.requesterWallet)}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard(request.requesterWallet, "wallet");
-              }}
-            >
-              {copiedWallet ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Date Submitted with icon */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Date Submitted
-            </p>
-          </div>
-          <p className="text-sm font-medium text-foreground pl-1">
-            {request.createdAt
-              ? format(new Date(request.createdAt), "MMM dd, yyyy")
-              : "—"}
-          </p>
-        </div>
-      </CardContent>
-
-      {/* responsive footer: stacked on mobile, inline on sm+; trigger is not absolute */}
-      <CardFooter className="pt-4 border-t border-border/40 flex items-center gap-2">
-        <div className="flex-1">
-          {String(request.status).toLowerCase() === "approved" ||
-          String(request.status).toLowerCase() === "verified" ? (
-            <Button
-              onClick={handleMint}
-              variant={alreadyHasNFT ? "destructive" : "default"}
-              size="sm"
-              className="flex-1 h-10 w-full"
-              disabled={isLoading || isMinting || !isConnected || alreadyHasNFT}
-            >
-              {isLoading || isMinting ? (
-                <>
-                  <Loader className="h-4 w-4 animate-spin mr-2" />
-                  {isMinting ? "Minting..." : "Processing..."}
-                </>
-              ) : alreadyHasNFT ? (
-                <>
-                  <AlertTriangle className="h-4 w-4 mr-2" />
-                  Already Have National ID
-                </>
-              ) : !isConnected ? (
-                "Connect Wallet First"
-              ) : !isCorrectNetwork ? (
-                "Click to Switch Network & Mint"
-              ) : (
-                "Mint NFT"
-              )}
-            </Button>
-          ) : isRejected ? (
-            <Button
-              onClick={async (e) => {
-                e.stopPropagation();
-                await handleDelete(e);
-              }}
-              variant="destructive"
-              size="sm"
-              className="flex-1 h-10 w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader className="h-4 w-4 animate-spin" />
-              ) : (
-                "Delete"
-              )}
-            </Button>
-          ) : (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleView();
-              }}
-              variant="default"
-              size="sm"
-              className="flex-1 h-10 w-full cursor-pointer"
-            >
-              View
-            </Button>
-          )}
-        </div>
-
-        <div>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
+        {/* let content grow so footer sticks to bottom */}
+        <CardContent className="space-y-4 pb-4 flex-1">
+          {/* Request ID with enhanced styling */}
+          <div className="bg-surface-100 rounded-lg p-3 border border-surface-300">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Request ID
+              </p>
+            </div>
+            <div className="flex items-center gap-2 group/copy">
+              <p className="font-mono text-sm font-semibold text-foreground truncate">
+                {shorten(request.requestId)}
+              </p>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => e.stopPropagation()}
-                className="h-10 w-10 p-0 ml-2 cursor-pointer"
-                aria-label="More actions"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyToClipboard(request.requestId, "asset");
+                }}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                {copiedAssetId ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
               </Button>
-            </DropdownMenu.Trigger>
+            </div>
+          </div>
 
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                side="top"
-                align="end"
-                sideOffset={8}
-                className="z-50 w-[160px] rounded-md border bg-popover p-1 shadow-lg"
+          {/* Requester Info with icon */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Requester
+              </p>
+            </div>
+            <div className="flex items-center gap-2 group/copy pl-1">
+              <p className="font-mono text-sm text-foreground font-medium">
+                {shorten(request.requesterWallet)}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 opacity-0 group-hover/copy:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyToClipboard(request.requesterWallet, "wallet");
+                }}
               >
-                <DropdownMenu.Item
-                  onClick={(e: any) => {
-                    e.stopPropagation();
-                    handleView();
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-muted/20 cursor-pointer"
-                >
-                  <Eye className="mr-2 h-4 w-4" /> View Details
-                </DropdownMenu.Item>
+                {copiedWallet ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          </div>
 
-                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+          {/* Date Submitted with icon */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Date Submitted
+              </p>
+            </div>
+            <p className="text-sm font-medium text-foreground pl-1">
+              {request.createdAt
+                ? format(new Date(request.createdAt), "MMM dd, yyyy")
+                : "—"}
+            </p>
+          </div>
+        </CardContent>
 
-                <DropdownMenu.Item
-                  onClick={(e: any) => {
-                    e.stopPropagation();
-                    handleDelete(e);
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 rounded text-sm text-destructive hover:bg-destructive/10 cursor-pointer"
+        {/* responsive footer: stacked on mobile, inline on sm+; trigger is not absolute */}
+        <CardFooter className="pt-4 border-t border-border/40 flex items-center gap-2">
+          <div className="flex-1">
+            {String(request.status).toLowerCase() === "approved" ||
+            String(request.status).toLowerCase() === "verified" ? (
+              <Button
+                onClick={handleMint}
+                variant={alreadyHasNFT ? "destructive" : "default"}
+                size="sm"
+                className="flex-1 h-10 w-full"
+                disabled={
+                  isLoading || isMinting || !isConnected || alreadyHasNFT
+                }
+              >
+                {isLoading || isMinting ? (
+                  <>
+                    <Loader className="h-4 w-4 animate-spin mr-2" />
+                    {isMinting ? "Minting..." : "Processing..."}
+                  </>
+                ) : alreadyHasNFT ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Already Have National ID
+                  </>
+                ) : !isConnected ? (
+                  "Connect Wallet First"
+                ) : !isCorrectNetwork ? (
+                  "Click to Switch Network & Mint"
+                ) : (
+                  "Mint NFT"
+                )}
+              </Button>
+            ) : isRejected ? (
+              <Button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await handleDelete(e);
+                }}
+                variant="destructive"
+                size="sm"
+                className="flex-1 h-10 w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleView();
+                }}
+                variant="default"
+                size="sm"
+                className="flex-1 h-10 w-full cursor-pointer"
+              >
+                View
+              </Button>
+            )}
+          </div>
+
+          <div>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-10 w-10 p-0 ml-2 cursor-pointer"
+                  aria-label="More actions"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-        </div>
-      </CardFooter>
-    </Card>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenu.Trigger>
+
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  side="top"
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 w-[160px] rounded-md border bg-popover p-1 shadow-lg"
+                >
+                  <DropdownMenu.Item
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleView();
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-muted/20 cursor-pointer"
+                  >
+                    <Eye className="mr-2 h-4 w-4" /> View Details
+                  </DropdownMenu.Item>
+
+                  <DropdownMenu.Separator className="my-1 h-px bg-border" />
+
+                  <DropdownMenu.Item
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleDelete(e);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded text-sm text-destructive hover:bg-destructive/10 cursor-pointer"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
+        </CardFooter>
+      </Card>
     </motion.div>
   );
 }

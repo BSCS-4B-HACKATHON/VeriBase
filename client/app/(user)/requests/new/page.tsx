@@ -35,7 +35,7 @@ export default function NewRequestPage() {
     if (typeof window === "undefined") return;
 
     const init = async () => {
-      const provider = (window as any).ethereum;
+      const provider = (window as { ethereum?: unknown }).ethereum;
       if (!provider) return;
 
       // create a viem wallet client around the injected provider (used for signing)
@@ -71,14 +71,32 @@ export default function NewRequestPage() {
       setAddress(null);
     };
 
-    (window as any).ethereum?.on?.("accountsChanged", onAccounts);
+    (
+      window as {
+        ethereum?: {
+          on?: (
+            event: string,
+            handler: (accounts: string[] | string) => void
+          ) => void;
+        };
+      }
+    ).ethereum?.on?.("accountsChanged", onAccounts);
     window.addEventListener("vb_wallet_disconnect", onDisconnect);
 
     return () => {
-      (window as any).ethereum?.removeListener?.("accountsChanged", onAccounts);
+      (
+        window as {
+          ethereum?: {
+            removeListener?: (
+              event: string,
+              handler: (accounts: string[] | string) => void
+            ) => void;
+          };
+        }
+      ).ethereum?.removeListener?.("accountsChanged", onAccounts);
       window.removeEventListener("vb_wallet_disconnect", onDisconnect);
     };
-  }, []);
+  }, [disconnectWallet]);
 
   // National ID form state
   const [nationalIdForm, setNationalIdForm] = useState({

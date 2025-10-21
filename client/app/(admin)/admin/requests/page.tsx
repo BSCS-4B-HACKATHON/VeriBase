@@ -9,35 +9,23 @@ import {
   Eye,
   Check,
   X,
-  Filter,
   Download,
   RefreshCw,
-  Calendar,
   FileText,
   ChevronLeft,
   ChevronRight,
   Clock,
   CheckCircle2,
   XCircle,
-  MoreHorizontal,
   User,
-  MapPin,
   Image as ImageIcon,
-  AlertTriangle,
   CreditCard,
-  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -61,12 +49,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   fetchAdminRequests,
@@ -79,7 +61,6 @@ import {
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import Link from "next/link";
 import { findFileUrl } from "@/lib/helpers";
 
 type FilterTab = "all" | "pending" | "verified" | "rejected";
@@ -101,7 +82,11 @@ interface ExtendedRequest extends VerificationRequest {
 function getStatusBadge(status: VerificationStatus) {
   const variants: Record<
     VerificationStatus,
-    { className: string; label: string; icon: any }
+    {
+      className: string;
+      label: string;
+      icon: React.ComponentType<{ className?: string }>;
+    }
   > = {
     verified: {
       className:
@@ -157,12 +142,6 @@ function RequestDetailsModal({
   const [detailedRequest, setDetailedRequest] =
     useState<DetailedAdminRequest | null>(null);
 
-  useEffect(() => {
-    if (isOpen && request) {
-      fetchDetailedRequest();
-    }
-  }, [isOpen, request]);
-
   const fetchDetailedRequest = async () => {
     if (!request) return;
 
@@ -180,6 +159,12 @@ function RequestDetailsModal({
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen && request) {
+      fetchDetailedRequest();
+    }
+  }, [isOpen, request, fetchDetailedRequest]);
 
   if (!request) return null;
 
@@ -815,6 +800,7 @@ export default function AdminRequestsPage() {
       toast.success("Data refreshed successfully");
     } catch (error) {
       toast.error("Failed to refresh data");
+      console.error("Refresh error:", error);
     } finally {
       setIsRefreshing(false);
     }
@@ -837,6 +823,7 @@ export default function AdminRequestsPage() {
       }
     } catch (error) {
       toast.error("Failed to approve request");
+      console.error("Approve error:", error);
     }
   };
 
@@ -852,6 +839,7 @@ export default function AdminRequestsPage() {
       }
     } catch (error) {
       toast.error("Failed to reject request");
+      console.error("Reject error:", error);
     }
   };
 

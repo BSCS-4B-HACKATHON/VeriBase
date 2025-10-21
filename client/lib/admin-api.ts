@@ -11,7 +11,7 @@ const API_BASE_URL =
 /**
  * Document metadata structure matching DB schema
  */
-export interface DocMeta {
+export interface DocMeta extends Record<string, unknown> {
   cid: string;
   filename: string;
   mime?: string;
@@ -71,12 +71,12 @@ export interface DetailedAdminRequest extends AdminRequest {
     DocMeta & {
       decryptedUrl?: string;
       decryptError?: boolean;
-      meta?: any;
+      meta?: Record<string, unknown>;
     }
   >;
   // Generic decrypted fields
-  decryptedFields?: Record<string, any>;
-  encryptedFields?: Record<string, any>;
+  decryptedFields?: Record<string, unknown>;
+  encryptedFields?: Record<string, unknown>;
 }
 
 export interface AdminRequestsResponse {
@@ -201,9 +201,12 @@ export async function approveRequest(
     }
 
     return await response.json();
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error approving request:", error);
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 
@@ -232,9 +235,12 @@ export async function rejectRequest(
     }
 
     return await response.json();
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error rejecting request:", error);
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 

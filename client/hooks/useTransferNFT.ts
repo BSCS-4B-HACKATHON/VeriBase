@@ -11,11 +11,7 @@ export function useTransferNFT() {
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferId, setTransferId] = useState<bigint | null>(null);
 
-  const {
-    data: hash,
-    error: writeError,
-    writeContract,
-  } = useWriteContract();
+  const { data: hash, error: writeError, writeContract } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({
@@ -48,9 +44,11 @@ export function useTransferNFT() {
           note || "", // legalDocumentCid - can be empty or contain notes
         ],
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error("Transfer error:", error);
-      toast.error(error.message || "Failed to initiate transfer");
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to initiate transfer";
+      toast.error(errorMessage);
       setIsTransferring(false);
       throw error;
     }

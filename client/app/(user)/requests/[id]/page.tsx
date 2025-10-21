@@ -25,29 +25,14 @@ import {
   XCircle,
   Calendar,
   Hash,
-  Image as ImageIcon,
 } from "lucide-react";
 import { getRequestById } from "@/lib/request";
 import { useWallet } from "@/hooks/useWallet";
 import { useParams } from "next/navigation";
 import { createWalletClient, custom, WalletClient } from "viem";
 import { baseSepolia } from "viem/chains";
-import {
-  BE_URL,
-  buildAndUploadMetadata,
-  encryptAndUploadFile,
-  encryptField,
-  findFileUrl,
-  genAesKey,
-  SERVER_PUBLIC_KEY_PEM,
-  wrapAesKeyForServer,
-} from "@/lib/helpers";
-import {
-  createSignWrapper,
-  submitNationalId,
-  updateLandTitle,
-  updateNationalId,
-} from "@/lib/request-submit";
+import { BE_URL, findFileUrl } from "@/lib/helpers";
+import { updateLandTitle, updateNationalId } from "@/lib/request-submit";
 
 type RequestStatus = "pending" | "verified" | "rejected";
 type RequestType = "national-id" | "land-title";
@@ -84,7 +69,7 @@ interface RequestData {
 }
 
 export default function RequestPage() {
-  const { address: walletAddress, isConnected } = useWallet();
+  const { address: walletAddress } = useWallet();
   const { id } = useParams();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -93,7 +78,7 @@ export default function RequestPage() {
   const [requestData, setRequestData] = useState<RequestData | null>(null);
   const [editedData, setEditedData] = useState<RequestData | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
-  const [address, setAddress] = useState<string | null>(() =>
+  const [address] = useState<string | null>(() =>
     typeof window !== "undefined" ? localStorage.getItem("vb_address") : null
   );
   const [walletCheckComplete, setWalletCheckComplete] = useState(false);
@@ -103,7 +88,7 @@ export default function RequestPage() {
     if (typeof window === "undefined") return;
 
     const init = async () => {
-      const provider = (window as any).ethereum;
+      const provider = (window as { ethereum?: unknown }).ethereum;
       if (!provider) {
         setWalletCheckComplete(true);
         return;

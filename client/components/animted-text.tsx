@@ -28,7 +28,11 @@ const defaultAnimations = {
   },
   bounce: {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { type: "spring", bounce: 0.5 } },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { type: "spring" as const, bounce: 0.5 },
+    },
   },
   typewriter: {
     hidden: { opacity: 0, width: 0 },

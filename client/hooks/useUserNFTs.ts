@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from "react";
 import { usePublicClient, useAccount } from "wagmi";
-import { baseSepolia } from "viem/chains";
 import NationalIdNFTABI from "@/src/abis/NationalIdNFT.json";
 import LandOwnershipNFTABI from "@/src/abis/LandOwnershipNFT.json";
 
@@ -17,7 +16,7 @@ const LAND_OWNERSHIP_NFT_ADDRESS = process.env
 /**
  * Document metadata structure from smart contract (DocMeta struct)
  */
-export interface DocMeta {
+export interface DocMeta extends Record<string, unknown> {
   cid: string;
   filename: string;
   mime: string;
@@ -39,6 +38,64 @@ export interface NFTMetadata {
   files: DocMeta[];
   consentTextVersion: string;
   consentTimestamp: bigint;
+}
+
+/**
+ * Decrypted file from backend
+ */
+export interface DecryptedFile {
+  cid: string;
+  filename?: string;
+  label?: string;
+  name?: string;
+  mime: string;
+  size: number;
+  iv: string;
+  tag: string;
+  decryptedUrl?: string | null;
+  decryptError?: boolean;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * National ID data structure
+ */
+export interface NationalIdData {
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  idNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+}
+
+/**
+ * Land title data structure
+ */
+export interface LandTitleData {
+  titleNumber?: string;
+  location?: string;
+  area?: string;
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  latitude?: string;
+  longitude?: string;
+  lotArea?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Decrypted metadata from backend
+ */
+export interface DecryptedMetadata {
+  encryptedFields?: Record<string, string>;
+  decryptedFields?: Record<string, string>;
+  decryptedFiles?: DecryptedFile[];
+  nationalIdData?: NationalIdData;
+  landTitleData?: LandTitleData;
+  iv?: string;
+  files?: Array<Record<string, unknown>>;
 }
 
 /**
@@ -69,7 +126,7 @@ export interface NFTDocument {
   // On-chain metadata
   metadata?: NFTMetadata;
   // Decrypted metadata (fetched from backend if owner)
-  decryptedMetadata?: any;
+  decryptedMetadata?: DecryptedMetadata;
 }
 
 export function useUserNFTs() {
@@ -82,7 +139,10 @@ export function useUserNFTs() {
    * Decrypt NFT metadata by calling backend endpoint
    * Only works if the viewer is the owner of the NFT
    */
-  const decryptMetadata = async (metadataCid: string, ownerAddress: string) => {
+  const decryptMetadata = async (
+    metadataCid: string,
+    ownerAddress: string
+  ): Promise<DecryptedMetadata | null> => {
     try {
       const BE_URL = process.env.NEXT_PUBLIC_BE_URL || "http://localhost:9000";
       const response = await fetch(`${BE_URL}/api/nft/decrypt-metadata`, {
@@ -161,7 +221,7 @@ export function useUserNFTs() {
               const mintedTimestamp = Number(metadata.consentTimestamp);
 
               // Decrypt metadata if owner is viewing (non-blocking, optional)
-              let decryptedMetadata = null;
+              let decryptedMetadata: DecryptedMetadata | null = null;
               if (ipfsCid) {
                 try {
                   decryptedMetadata = await decryptMetadata(ipfsCid, address);
@@ -196,7 +256,7 @@ export function useUserNFTs() {
                 verificationAuthority: "Base Own Admin",
                 validationTimestamp: new Date(mintedTimestamp).toISOString(),
                 metadata,
-                decryptedMetadata,
+                decryptedMetadata: decryptedMetadata || undefined,
               });
             } catch (error) {
               console.error(`Error fetching National ID NFT #${i}:`, error);
@@ -238,7 +298,7 @@ export function useUserNFTs() {
               const mintedTimestamp = Number(metadata.consentTimestamp);
 
               // Decrypt metadata if owner is viewing (non-blocking, optional)
-              let decryptedMetadata = null;
+              let decryptedMetadata: DecryptedMetadata | null = null;
               if (ipfsCid) {
                 try {
                   decryptedMetadata = await decryptMetadata(ipfsCid, address);
@@ -273,7 +333,7 @@ export function useUserNFTs() {
                 verificationAuthority: "Base Own Admin",
                 validationTimestamp: new Date(mintedTimestamp).toISOString(),
                 metadata,
-                decryptedMetadata,
+                decryptedMetadata: decryptedMetadata || undefined,
               });
             } catch (error) {
               console.error(

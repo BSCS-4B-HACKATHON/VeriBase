@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { useUserNFTs, type NFTDocument } from "@/hooks/useUserNFTs";
+import {
+  useUserNFTs,
+  type NFTDocument,
+  type DecryptedFile,
+} from "@/hooks/useUserNFTs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +27,6 @@ import {
   Clock,
   User,
   Maximize2,
-  ChevronRight,
-  FileCheck,
   Link as LinkIcon,
   Send,
 } from "lucide-react";
@@ -87,26 +89,6 @@ export default function NFTDocumentViewPage() {
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard!`);
-  };
-
-  const handleCopyAllDetails = () => {
-    if (!nft) return;
-
-    // TODO: Extend NFTDocument type with additional fields from metadata
-    const details = `
-NFT Document Details
-====================
-Title: ${nft.title}
-Type: ${nft.type}
-Token ID: ${nft.tokenId}
-Contract Address: ${nft.contractAddress}
-Owner Address: ${nft.ownerAddress}
-Minted Date: ${new Date(nft.mintedDate).toLocaleString()}
-Verified: ${nft.verified}
-    `.trim();
-
-    navigator.clipboard.writeText(details);
-    toast.success("All details copied to clipboard!");
   };
 
   const handleDownloadMetadata = () => {
@@ -202,7 +184,7 @@ Verified: ${nft.verified}
             <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">NFT Not Found</h3>
             <p className="text-muted-foreground mb-6">
-              The NFT document you're looking for doesn't exist.
+              The NFT document you&apos;re looking for doesn&apos;t exist.
             </p>
             <Button asChild>
               <Link href="/nfts">
@@ -774,76 +756,82 @@ Verified: ${nft.verified}
             )}
 
             {/* Document Uploads */}
-            {(nft.decryptedMetadata.decryptedFiles ||
-              nft.decryptedMetadata.files) &&
-              (nft.decryptedMetadata.decryptedFiles ||
-                nft.decryptedMetadata.files
-              ).length > 0 && (
-                <Card className="bg-surface-75 rounded-xl border-border/40">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <FileText className="w-5 h-5 text-[#3ECF8E]" />
-                      Document Uploads
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Encrypted files stored securely on IPFS
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {(
-                      nft.decryptedMetadata.decryptedFiles ||
-                      nft.decryptedMetadata.files
-                    ).map(
-                      (file: any, index: number) => {
-                        const isImage =
-                          file.mime?.startsWith("image/") ||
-                          file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+            {((nft.decryptedMetadata?.decryptedFiles &&
+              nft.decryptedMetadata.decryptedFiles.length > 0) ||
+              (nft.decryptedMetadata?.files &&
+                nft.decryptedMetadata.files.length > 0)) && (
+              <Card className="bg-surface-75 rounded-xl border-border/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FileText className="w-5 h-5 text-[#3ECF8E]" />
+                    Document Uploads
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Encrypted files stored securely on IPFS
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(
+                    nft.decryptedMetadata.decryptedFiles ||
+                    nft.decryptedMetadata.files ||
+                    []
+                  ).map(
+                    (
+                      fileData: DecryptedFile | Record<string, unknown>,
+                      index: number
+                    ) => {
+                      const file = fileData as DecryptedFile;
+                      const isImage =
+                        file.mime?.startsWith("image/") ||
+                        file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
 
-                        return (
-                          <div key={index} className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">
-                                {file.filename || `File ${index + 1}`}
+                      return (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {file.filename || `File ${index + 1}`}
+                            </span>
+                            {file.size && (
+                              <span className="text-xs text-muted-foreground">
+                                {(file.size / 1024).toFixed(2)} KB
                               </span>
-                              {file.size && (
-                                <span className="text-xs text-muted-foreground">
-                                  {(file.size / 1024).toFixed(2)} KB
-                                </span>
-                              )}
-                            </div>
-                            {isImage ? (
-                              <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
-                                <img
-                                  src={file.decryptedUrl}
-                                  alt={file.filename || `Image ${index + 1}`}
-                                  className="w-full h-auto max-h-[400px] object-contain"
-                                />
-                              </div>
-                            ) : (
-                              <a
-                                href={file.decryptedUrl}
-                                download={file.filename}
-                                className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border/40 bg-surface-200 hover:bg-surface-300 transition-colors"
-                              >
-                                <FileText className="w-4 h-4" />
-                                <span className="text-sm">View</span>
-                              </a>
                             )}
-                            {index <
-                              (nft.decryptedMetadata.decryptedFiles ||
-                                nft.decryptedMetadata.files
-                              ).length -
-                                1 && <Separator className="bg-border/40" />}
                           </div>
-                        );
-                      }
-                    )}
-                    <p className="text-xs text-muted-foreground mt-4">
-                      Accepted formats: JPG, PNG (Max 5MB)
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+                          {isImage ? (
+                            <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
+                              <img
+                                src={file.decryptedUrl || undefined}
+                                alt={file.filename || `Image ${index + 1}`}
+                                className="w-full h-auto max-h-[400px] object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <a
+                              href={file.decryptedUrl || undefined}
+                              download={file.filename}
+                              className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border/40 bg-surface-200 hover:bg-surface-300 transition-colors"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="text-sm">View</span>
+                            </a>
+                          )}
+                          {index <
+                            (
+                              nft.decryptedMetadata?.decryptedFiles ||
+                              nft.decryptedMetadata?.files ||
+                              []
+                            ).length -
+                              1 && <Separator className="bg-border/40" />}
+                        </div>
+                      );
+                    }
+                  )}
+                  <p className="text-xs text-muted-foreground mt-4">
+                    Accepted formats: JPG, PNG (Max 5MB)
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </motion.div>
         )}
 

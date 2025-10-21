@@ -32,7 +32,6 @@ import {
   Blocks,
   Send,
   CheckCircle2,
-  AlertCircle,
   Shield,
 } from "lucide-react";
 import Link from "next/link";
@@ -42,7 +41,7 @@ interface StatCard {
   title: string;
   value: number;
   change: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
 }
 
@@ -78,7 +77,7 @@ export default function AdminDashboardPage() {
   const [processingRequest, setProcessingRequest] = useState<string | null>(
     null
   );
-  const [blockchainData, setBlockchainData] = useState({
+  const [blockchainData] = useState({
     network: "Ethereum Mainnet",
     nftsMinted: 1247,
     totalTransfers: 384,
@@ -146,14 +145,24 @@ export default function AdminDashboardPage() {
       if (requestsRes.ok) {
         const requestsData = await requestsRes.json();
         if (requestsData.ok) {
-          const formattedRequests = requestsData.requests.map((req: any) => ({
-            id: req.requestId,
-            user: req.requesterWallet,
-            type:
-              req.requestType === "national_id" ? "National ID" : "Land Title",
-            date: new Date(req.createdAt).toISOString().split("T")[0],
-            status: req.status === "verified" ? "approved" : req.status,
-          }));
+          const formattedRequests = requestsData.requests.map(
+            (req: {
+              requestId: string;
+              requesterWallet: string;
+              requestType: string;
+              createdAt: string;
+              status: string;
+            }) => ({
+              id: req.requestId,
+              user: req.requesterWallet,
+              type:
+                req.requestType === "national_id"
+                  ? "National ID"
+                  : "Land Title",
+              date: new Date(req.createdAt).toISOString().split("T")[0],
+              status: req.status === "verified" ? "approved" : req.status,
+            })
+          );
           setRequests(formattedRequests);
         }
       }

@@ -1,8 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
-import ConnectWallet from "@/components/connect-wallet";
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -14,17 +13,12 @@ import MetamaskIcon from "@/public/metamask-logo.png";
 import CoinBaseIcon from "@/public/cbw.svg";
 import { useConnect } from "wagmi";
 import {
-  Wallet,
   ChevronDown,
   FileCheck,
   Upload,
   Link2,
   CheckCircle2,
   Mouse,
-  ShieldCheck,
-  MapPin,
-  IdCard,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";

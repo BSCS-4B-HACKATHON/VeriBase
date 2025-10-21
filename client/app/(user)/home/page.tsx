@@ -16,8 +16,6 @@ import {
   Search,
   Activity,
   TrendingUp,
-  Shield,
-  Sparkles,
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -94,17 +92,25 @@ export default function DashboardHome() {
             data.stats.recentRequests &&
             data.stats.recentRequests.length > 0
           ) {
-            const mapped = data.stats.recentRequests.map((req: any) => ({
-              id: req.id,
-              name:
-                req.minimalPublicLabel ||
-                `${
-                  req.type === "national_id" ? "National ID" : "Land Title"
-                } Request`,
-              type: req.type === "national_id" ? "National ID" : "Land Title",
-              status: req.status === "verified" ? "approved" : req.status,
-              date: new Date(req.createdAt).toISOString().split("T")[0],
-            }));
+            const mapped = data.stats.recentRequests.map(
+              (req: {
+                id: string;
+                minimalPublicLabel?: string;
+                type: string;
+                status: string;
+                createdAt: string;
+              }) => ({
+                id: req.id,
+                name:
+                  req.minimalPublicLabel ||
+                  `${
+                    req.type === "national_id" ? "National ID" : "Land Title"
+                  } Request`,
+                type: req.type === "national_id" ? "National ID" : "Land Title",
+                status: req.status === "verified" ? "approved" : req.status,
+                date: new Date(req.createdAt).toISOString().split("T")[0],
+              })
+            );
             setRecentRequests(mapped);
           }
 
@@ -207,7 +213,7 @@ export default function DashboardHome() {
               <span className="text-3xl">👋</span>
             </h1>
             <p className="text-muted-foreground text-sm md:text-base">
-              Here's what's happening with your verifications today.
+              Here&apos;s what&apos;s happening with your verifications today.
             </p>
           </div>
           {address && (

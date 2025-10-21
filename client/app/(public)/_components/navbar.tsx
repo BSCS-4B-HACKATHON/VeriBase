@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Download, Menu, Shield, ShieldX, X } from "lucide-react";
-import Link from "next/link";
+import { Menu, Shield, X } from "lucide-react";
 import ConnectWallet from "@/components/connect-wallet";
 
 export default function Navbar() {

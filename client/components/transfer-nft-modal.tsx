@@ -17,14 +17,12 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   Hash,
-  Wallet,
   Fuel,
   Network,
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransferNFT } from "@/hooks/useTransferNFT";
-import { baseSepolia } from "viem/chains";
 
 interface NFTDocument {
   id: string;
@@ -61,7 +59,7 @@ export function TransferNFTModal({
     useTransferNFT();
 
   // Estimated gas fee (mock data - replace with actual blockchain call)
-  const [estimatedGas, setEstimatedGas] = useState("~0.0001 ETH");
+  const [estimatedGas] = useState("~0.0001 ETH");
 
   // Reset form when modal closes
   useEffect(() => {
@@ -125,7 +123,7 @@ export function TransferNFTModal({
     try {
       await transferNFT(nft.tokenId, recipientAddress as `0x${string}`, note);
       // Success will be handled by useEffect watching isConfirmed
-    } catch (error) {
+    } catch {
       console.error("Transfer error:", error);
       // Error toast is handled by the hook
     }
@@ -136,7 +134,7 @@ export function TransferNFTModal({
     if (isConfirmed && hash) {
       setIsSuccess(true);
       toast.success("NFT transferred successfully!");
-      
+
       // Close modal after success
       setTimeout(() => {
         onClose();
@@ -149,9 +147,7 @@ export function TransferNFTModal({
   // Show error toast if transfer fails
   useEffect(() => {
     if (error) {
-      toast.error(
-        error.message || "Transfer failed. Please try again."
-      );
+      toast.error(error.message || "Transfer failed. Please try again.");
     }
   }, [error]);
 
@@ -181,7 +177,7 @@ export function TransferNFTModal({
     return () => {
       document.removeEventListener("keydown", handleEsc);
     };
-  }, [isOpen, isTransferring]);
+  }, [isOpen, isTransferring, handleClose]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -599,7 +595,7 @@ export function TransferNFTModal({
                         <p className="text-sm text-muted-foreground mb-6">
                           Your NFT has been transferred to the recipient.
                         </p>
-                        
+
                         {hash && (
                           <div className="mb-6 p-4 bg-surface-75/50 rounded-lg border border-border/40">
                             <p className="text-xs text-muted-foreground mb-2">
@@ -610,7 +606,9 @@ export function TransferNFTModal({
                                 {hash.slice(0, 10)}...{hash.slice(-8)}
                               </code>
                               <Button
-                                onClick={() => handleCopyAddress(hash, "Transaction hash")}
+                                onClick={() =>
+                                  handleCopyAddress(hash, "Transaction hash")
+                                }
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0"
@@ -629,7 +627,7 @@ export function TransferNFTModal({
                             </a>
                           </div>
                         )}
-                        
+
                         <Button
                           onClick={handleClose}
                           size="lg"

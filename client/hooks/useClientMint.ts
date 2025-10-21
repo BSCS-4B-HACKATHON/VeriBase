@@ -6,7 +6,12 @@
  */
 
 import { useState, useEffect } from "react";
-import { useWalletClient, usePublicClient, useAccount, useSwitchChain } from "wagmi";
+import {
+  useWalletClient,
+  usePublicClient,
+  useAccount,
+  useSwitchChain,
+} from "wagmi";
 import { parseAbi, encodeFunctionData } from "viem";
 import { baseSepolia } from "viem/chains";
 import NationalIdNFTABI from "@/src/abis/NationalIdNFT.json";
@@ -36,7 +41,8 @@ export function useClientMint() {
   const [error, setError] = useState<string | null>(null);
 
   const { address, isConnected, chain } = useAccount();
-  const { data: walletClient, refetch: refetchWalletClient } = useWalletClient();
+  const { data: walletClient, refetch: refetchWalletClient } =
+    useWalletClient();
   const publicClient = usePublicClient({ chainId: baseSepolia.id });
   const { switchChain, switchChainAsync } = useSwitchChain();
 
@@ -78,13 +84,15 @@ export function useClientMint() {
         console.log("⚠️ No wallet client, trying to refetch...");
         const refetchResult = await refetchWalletClient();
         currentWalletClient = refetchResult.data;
-        
+
         if (!currentWalletClient) {
           console.log("❌ Still no wallet client after refetch");
           console.log("   Chain ID:", chain?.id);
           console.log("   Is connected:", isConnected);
           console.log("   Address:", address);
-          throw new Error("Wallet not ready. Please disconnect and reconnect your wallet.");
+          throw new Error(
+            "Wallet not ready. Please disconnect and reconnect your wallet."
+          );
         }
         console.log("✅ Wallet client refetched successfully");
       }
@@ -96,19 +104,23 @@ export function useClientMint() {
 
       // Check if on correct network and switch if needed
       if (chain?.id !== baseSepolia.id) {
-        console.log("⚠️ Wrong network, attempting to switch to Base Sepolia...");
+        console.log(
+          "⚠️ Wrong network, attempting to switch to Base Sepolia..."
+        );
         try {
           if (switchChainAsync) {
             await switchChainAsync({ chainId: baseSepolia.id });
             console.log("✅ Switched to Base Sepolia");
             // Wait a bit for the wallet client to update
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           } else {
             throw new Error("Network switching not supported");
           }
-        } catch (switchError: any) {
+        } catch (switchError) {
           console.error("❌ Failed to switch network:", switchError);
-          throw new Error("Please switch to Base Sepolia network in your wallet");
+          throw new Error(
+            "Please switch to Base Sepolia network in your wallet"
+          );
         }
       }
 
@@ -163,7 +175,7 @@ export function useClientMint() {
       const consentTimestampMs = request.consent?.timestamp
         ? new Date(request.consent.timestamp).getTime()
         : Date.now();
-      
+
       const contractArgs = [
         request.requestType || params.requestType, // requestType
         request.minimalPublicLabel || "Verified Document", // minimalPublicLabel
@@ -178,7 +190,10 @@ export function useClientMint() {
       console.log("   Contract:", contractAddress);
       console.log("   Function:", functionName);
       console.log("   RequestType:", request.requestType || params.requestType);
-      console.log("   Label:", request.minimalPublicLabel || "Verified Document");
+      console.log(
+        "   Label:",
+        request.minimalPublicLabel || "Verified Document"
+      );
       console.log("   CID:", request.metadataCid || params.metadataURI);
       console.log("   Consent timestamp:", consentTimestampMs);
 
@@ -243,52 +258,63 @@ export function useClientMint() {
         transactionHash: hash,
         explorerUrl,
       };
-    } catch (err: any) {
+    } catch (err) {
       console.error("❌ Minting failed:", err);
 
       let errorMessage = "Failed to mint NFT";
-      
+
       // Check full error object for contract-specific errors (safely)
       let fullError = "";
       try {
         fullError = JSON.stringify(err, (key, value) =>
-          typeof value === 'bigint' ? value.toString() : value
+          typeof value === "bigint" ? value.toString() : value
         );
       } catch {
         fullError = String(err);
       }
 
+      const message = err instanceof Error ? err.message : "";
+      const errObj = err as {
+        message?: string;
+        cause?: { shortMessage?: string };
+        shortMessage?: string;
+      };
+
       if (
-        err.message?.includes("User rejected") ||
-        err.message?.includes("User denied")
+        message.includes("User rejected") ||
+        message.includes("User denied")
       ) {
         errorMessage = "Transaction was rejected";
       } else if (
         fullError.includes("WalletAlreadyHasNationalId") ||
-        err.message?.includes("WalletAlreadyHasNationalId")
+        message.includes("WalletAlreadyHasNationalId")
       ) {
-        errorMessage = "You already have a National ID NFT. Each wallet can only have one. Try using a different wallet address.";
+        errorMessage =
+          "You already have a National ID NFT. Each wallet can only have one. Try using a different wallet address.";
       } else if (
         fullError.includes("DuplicateMetadata") ||
-        err.message?.includes("DuplicateMetadata")
+        message.includes("DuplicateMetadata")
       ) {
-        errorMessage = "This metadata has already been minted to another wallet";
-      } else if (err.message?.includes("circuit breaker")) {
-        errorMessage = "MetaMask rate limit hit. Please wait 2-5 minutes and try again, or switch to a different wallet/network temporarily.";
-      } else if (err.message?.includes("insufficient funds")) {
-        errorMessage = "Insufficient funds for gas fees. Get testnet ETH from Base Sepolia faucet.";
+        errorMessage =
+          "This metadata has already been minted to another wallet";
+      } else if (message.includes("circuit breaker")) {
+        errorMessage =
+          "MetaMask rate limit hit. Please wait 2-5 minutes and try again, or switch to a different wallet/network temporarily.";
+      } else if (message.includes("insufficient funds")) {
+        errorMessage =
+          "Insufficient funds for gas fees. Get testnet ETH from Base Sepolia faucet.";
       } else if (
-        err.message?.includes("estimate") ||
-        err.message?.includes("Unable to estimate")
+        message.includes("estimate") ||
+        message.includes("Unable to estimate")
       ) {
         errorMessage =
           "Unable to estimate gas. This might mean the transaction would fail. Check if you already have this NFT.";
-      } else if (err.cause?.shortMessage) {
-        errorMessage = err.cause.shortMessage;
-      } else if (err.shortMessage) {
-        errorMessage = err.shortMessage;
-      } else if (err.message) {
-        errorMessage = err.message;
+      } else if (errObj.cause?.shortMessage) {
+        errorMessage = errObj.cause.shortMessage;
+      } else if (errObj.shortMessage) {
+        errorMessage = errObj.shortMessage;
+      } else if (errObj.message) {
+        errorMessage = errObj.message;
       }
 
       setError(errorMessage);
@@ -308,7 +334,7 @@ export function useClientMint() {
     isReady: isConnected && !!walletClient && chain?.id === baseSepolia.id,
     isWrongNetwork: isConnected && chain?.id !== baseSepolia.id,
     currentChainId: chain?.id,
-    switchToBaseSepolia: switchChainAsync 
+    switchToBaseSepolia: switchChainAsync
       ? () => switchChainAsync({ chainId: baseSepolia.id })
       : undefined,
   };

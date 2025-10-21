@@ -5,6 +5,7 @@ import {
   buildAndUploadMetadata,
   SERVER_PUBLIC_KEY_PEM,
   wrapAesKeyForServer,
+  type FileWithMeta,
 } from "@/lib/helpers";
 import type { WalletClient } from "viem";
 import type { SignableMessage } from "viem";
@@ -35,7 +36,7 @@ type SubmitOptions = {
   walletClient: WalletClient | null;
   BE_URL: string;
   onSuccess?: () => void;
-  onError?: (err: any) => void;
+  onError?: (err: Error) => void;
   setIsSubmitting?: (b: boolean) => void;
   toast: { success: (s: string) => void; error: (s: string) => void };
 };
@@ -99,7 +100,7 @@ export async function submitNationalId(
     const encExpiry = await encryptField(aesKey, form.expiryDate);
     const encId = await encryptField(aesKey, form.idNumber);
 
-    const filesMeta: Array<any> = [];
+    const filesMeta: Array<FileWithMeta> = [];
 
     const frontMeta = await encryptAndUploadFile(
       form.frontPicture!,
@@ -186,7 +187,7 @@ export async function submitNationalId(
   } catch (err) {
     console.error("submitNationalId error:", err);
     toast.error("Failed to submit request. Please try again.");
-    if (onError) onError(err);
+    if (onError) onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
     if (setIsSubmitting) setIsSubmitting(false);
   }
@@ -252,7 +253,7 @@ export async function submitLandTitle(
     const encTitle = await encryptField(aesKey, form.titleNumber);
     const encArea = await encryptField(aesKey, form.lotArea);
 
-    const filesMeta: Array<any> = [];
+    const filesMeta: Array<FileWithMeta> = [];
     const deedMeta = await encryptAndUploadFile(
       form.deedUpload!,
       aesKey,
@@ -325,7 +326,7 @@ export async function submitLandTitle(
   } catch (err) {
     console.error("submitLandTitle error:", err);
     toast.error("Failed to submit request. Please try again.");
-    if (onError) onError(err);
+    if (onError) onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
     if (setIsSubmitting) setIsSubmitting(false);
   }
@@ -362,7 +363,7 @@ export async function updateNationalId(
     const encExpiry = await encryptField(aesKey, form.expiryDate);
     const encId = await encryptField(aesKey, form.idNumber);
 
-    const filesMeta: Array<any> = [];
+    const filesMeta: Array<FileWithMeta> = [];
 
     if (form.frontPicture) {
       const m = await encryptAndUploadFile(form.frontPicture, aesKey, address);
@@ -428,7 +429,7 @@ export async function updateNationalId(
   } catch (err) {
     console.error("updateNationalId error:", err);
     toast.error("Failed to update request. Please try again.");
-    if (onError) onError(err);
+    if (onError) onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
     if (setIsSubmitting) setIsSubmitting(false);
   }
@@ -465,7 +466,7 @@ export async function updateLandTitle(
     const encTitle = await encryptField(aesKey, form.titleNumber);
     const encArea = await encryptField(aesKey, form.lotArea);
 
-    const filesMeta: Array<any> = [];
+    const filesMeta: Array<FileWithMeta> = [];
     if (form.deedUpload) {
       const deedMeta = await encryptAndUploadFile(
         form.deedUpload,
@@ -524,7 +525,7 @@ export async function updateLandTitle(
   } catch (err) {
     console.error("updateLandTitle error:", err);
     toast.error("Failed to update request. Please try again.");
-    if (onError) onError(err);
+    if (onError) onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
     if (setIsSubmitting) setIsSubmitting(false);
   }
