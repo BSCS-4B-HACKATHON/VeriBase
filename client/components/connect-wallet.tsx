@@ -14,26 +14,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Copy, LogOut, CheckCircle2, Wallet } from "lucide-react";
+import { Copy, LogOut, CheckCircle2, Wallet, Shield } from "lucide-react";
 import { IconDashboard } from "@tabler/icons-react";
 import Link from "next/link";
 import { shorten } from "@/lib/helpers";
+import { useAdmin } from "@/hooks/useAdmin";
 
 export default function ConnectWallet() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const [copied, setCopied] = useState(false);
-
-  const adminWallets = process.env.NEXT_PUBLIC_ADMIN_WALLETS
-    ? process.env.NEXT_PUBLIC_ADMIN_WALLETS.split(",").map((addr) =>
-        addr.toLowerCase()
-      )
-    : [];
-
-  const isAdmin = address
-    ? adminWallets.includes(address.toLowerCase())
-    : false;
+  const { isAdmin } = useAdmin();
 
   const handleConnect = (connectorId: string) => {
     const connector = connectors.find((c) => c.id === connectorId);
@@ -154,12 +146,12 @@ export default function ConnectWallet() {
 
             {isAdmin && (
               <DropdownMenuItem className="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors">
-                <IconDashboard className="w-4 h-4 text-white/60 group-hover:text-[#3ECF8E] transition-colors" />
+                <Shield className="w-4 h-4 text-white/60 group-hover:text-[#3ECF8E] transition-colors" />
                 <Link
                   href="/admin"
                   className="text-sm text-white/80 group-hover:text-white transition-colors"
                 >
-                  Admin
+                  Admin Panel
                 </Link>
               </DropdownMenuItem>
             )}
