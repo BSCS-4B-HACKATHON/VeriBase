@@ -3,13 +3,7 @@
  * Handles contract interactions with viem
  */
 
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  defineChain,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 import NationalIdNFTArtifact from "../abis/NationalIdNFT.json";
 import LandOwnershipNFTArtifact from "../abis/LandOwnershipNFT.json";
@@ -35,110 +29,6 @@ export const publicClient = createPublicClient({
   chain: baseSepolia,
   transport: http("https://sepolia.base.org"),
 });
-
-/**
- * Create a wallet client for writing to contracts
- * Use the admin private key from environment
- */
-export function createAdminWalletClient() {
-  const privateKey = process.env.ADMIN_PRIVATE_KEY;
-
-  if (!privateKey) {
-    throw new Error("ADMIN_PRIVATE_KEY not found in environment variables");
-  }
-
-  const account = privateKeyToAccount(
-    privateKey.startsWith("0x")
-      ? (privateKey as `0x${string}`)
-      : (`0x${privateKey}` as `0x${string}`)
-  );
-
-  return createWalletClient({
-    account,
-    chain: baseSepolia,
-    transport: http("https://sepolia.base.org"),
-  });
-}
-
-/**
- * Mint a National ID NFT
- * @param recipientAddress - Address to receive the NFT
- * @param metadata - Metadata for the NFT
- * @returns Transaction hash
- */
-export async function mintNationalIdNFT(
-  recipientAddress: `0x${string}`,
-  metadata: {
-    requestType: string;
-    minimalPublicLabel: string;
-    metadataCid: string;
-    metadataHash: string;
-    uploaderSignature: string;
-    consentTextVersion: string;
-    consentTimestamp: number;
-  }
-): Promise<`0x${string}`> {
-  const walletClient = createAdminWalletClient();
-
-  const hash = await walletClient.writeContract({
-    address: CONTRACT_ADDRESSES.NationalIdNFT,
-    abi: NationalIdNFTABI,
-    functionName: "mintNationalId",
-    args: [
-      recipientAddress,
-      metadata.requestType,
-      metadata.minimalPublicLabel,
-      metadata.metadataCid,
-      metadata.metadataHash,
-      metadata.uploaderSignature,
-      metadata.consentTextVersion,
-      BigInt(metadata.consentTimestamp),
-    ],
-  });
-
-  // console.log("✅ National ID NFT mint transaction:", hash);
-  return hash;
-}
-
-/**
- * Mint a Land Ownership NFT
- * @param recipientAddress - Address to receive the NFT
- * @param metadata - Metadata for the NFT
- * @returns Transaction hash
- */
-export async function mintLandOwnershipNFT(
-  recipientAddress: `0x${string}`,
-  metadata: {
-    requestType: string;
-    minimalPublicLabel: string;
-    metadataCid: string;
-    metadataHash: string;
-    uploaderSignature: string;
-    consentTextVersion: string;
-    consentTimestamp: number;
-  }
-): Promise<`0x${string}`> {
-  const walletClient = createAdminWalletClient();
-
-  const hash = await walletClient.writeContract({
-    address: CONTRACT_ADDRESSES.LandOwnershipNFT,
-    abi: LandOwnershipNFTABI,
-    functionName: "mintLandOwnership",
-    args: [
-      recipientAddress,
-      metadata.requestType,
-      metadata.minimalPublicLabel,
-      metadata.metadataCid,
-      metadata.metadataHash,
-      metadata.uploaderSignature,
-      metadata.consentTextVersion,
-      BigInt(metadata.consentTimestamp),
-    ],
-  });
-
-  // console.log("✅ Land Ownership NFT mint transaction:", hash);
-  return hash;
-}
 
 /**
  * Check if an address has a National ID NFT
