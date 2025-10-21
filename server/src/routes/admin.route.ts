@@ -13,7 +13,7 @@ const adminRouter = Router();
 adminRouter.get("/check/:walletAddress", async (req, res) => {
   try {
     const { walletAddress } = req.params;
-    console.log("🔍 Checking admin status for:", walletAddress);
+    // console.log("🔍 Checking admin status for:", walletAddress);
 
     if (!walletAddress) {
       return res.status(400).json({
@@ -31,7 +31,7 @@ adminRouter.get("/check/:walletAddress", async (req, res) => {
     }
 
     const isAdmin = await (Admin as any).isAdmin(walletAddress);
-    console.log("✅ Admin check result:", { walletAddress, isAdmin });
+    // console.log("✅ Admin check result:", { walletAddress, isAdmin });
 
     return res.json({
       success: true,

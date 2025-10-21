@@ -37,7 +37,7 @@ export function useAdmin() {
 
         const data = await response.json();
 
-        console.log("Admin check response:", data);
+        // console.log("Admin check response:", data);
 
         if (data.success) {
           setIsAdmin(data.isAdmin);

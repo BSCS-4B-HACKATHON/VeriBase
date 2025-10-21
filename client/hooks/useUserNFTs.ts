@@ -102,8 +102,8 @@ export function useUserNFTs() {
       }
 
       const result = await response.json();
-      console.log("🔐 Decrypted metadata result:", result);
-      console.log("📁 Files detail:", result.data?.files);
+      // console.log("🔐 Decrypted metadata result:", result);
+      // console.log("📁 Files detail:", result.data?.files);
       return result.success ? result.data : null;
     } catch (error) {
       console.warn("Error decrypting metadata:", error);
@@ -132,7 +132,7 @@ export function useUserNFTs() {
             args: [address],
           })) as bigint;
 
-          console.log(`User has ${balance.toString()} National ID NFTs`);
+          // console.log(`User has ${balance.toString()} National ID NFTs`);
 
           // For each token, get the tokenId
           for (let i = 0; i < Number(balance); i++) {
@@ -166,10 +166,10 @@ export function useUserNFTs() {
                 try {
                   decryptedMetadata = await decryptMetadata(ipfsCid, address);
                 } catch (error) {
-                  console.warn(
-                    "Failed to decrypt National ID metadata:",
-                    error
-                  );
+                  // console.warn(
+                  //   "Failed to decrypt National ID metadata:",
+                  //   error
+                  // );
                 }
               }
 

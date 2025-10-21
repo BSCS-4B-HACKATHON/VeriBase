@@ -96,7 +96,7 @@ export async function mintNationalIdNFT(
     ],
   });
 
-  console.log("✅ National ID NFT mint transaction:", hash);
+  // console.log("✅ National ID NFT mint transaction:", hash);
   return hash;
 }
 
@@ -136,7 +136,7 @@ export async function mintLandOwnershipNFT(
     ],
   });
 
-  console.log("✅ Land Ownership NFT mint transaction:", hash);
+  // console.log("✅ Land Ownership NFT mint transaction:", hash);
   return hash;
 }
 
@@ -249,11 +249,11 @@ export async function getLandOwnershipMetadata(tokenId: bigint): Promise<any> {
  */
 export async function waitForTransaction(hash: `0x${string}`) {
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  console.log("✅ Transaction confirmed:", {
-    hash,
-    blockNumber: receipt.blockNumber,
-    status: receipt.status,
-  });
+  // console.log("✅ Transaction confirmed:", {
+  //   hash,
+  //   blockNumber: receipt.blockNumber,
+  //   status: receipt.status,
+  // });
   return receipt;
 }
 

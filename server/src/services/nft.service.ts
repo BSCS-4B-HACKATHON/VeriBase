@@ -36,11 +36,11 @@ try {
   );
   LandOwnershipNFTABI = landOwnershipData.abi;
 
-  console.log("✅ Contract ABIs loaded successfully");
-  console.log(`   National ID NFT ABI: ${NationalIdNFTABI.length} functions`);
-  console.log(
-    `   Land Ownership NFT ABI: ${LandOwnershipNFTABI.length} functions`
-  );
+  // console.log("✅ Contract ABIs loaded successfully");
+  // console.log(`   National ID NFT ABI: ${NationalIdNFTABI.length} functions`);
+  // console.log(
+  //   `   Land Ownership NFT ABI: ${LandOwnershipNFTABI.length} functions`
+  // );
 } catch (error) {
   console.warn(
     "⚠️  Contract ABIs not found. Make sure they're copied to server/src/abis/"
@@ -86,18 +86,18 @@ if (ADMIN_PRIVATE_KEY) {
       transport: http(BLOCKCHAIN_RPC_URL),
     });
 
-    console.log("✅ Blockchain clients initialized");
-    console.log(`   Network: Base Sepolia (${baseSepolia.id})`);
-    console.log(`   Admin: ${account.address}`);
-    console.log(`   National ID NFT: ${NATIONAL_ID_NFT_ADDRESS}`);
-    console.log(`   Land Ownership NFT: ${LAND_OWNERSHIP_NFT_ADDRESS}`);
+    // console.log("✅ Blockchain clients initialized");
+    // console.log(`   Network: Base Sepolia (${baseSepolia.id})`);
+    // console.log(`   Admin: ${account.address}`);
+    // console.log(`   National ID NFT: ${NATIONAL_ID_NFT_ADDRESS}`);
+    // console.log(`   Land Ownership NFT: ${LAND_OWNERSHIP_NFT_ADDRESS}`);
   } catch (error) {
     console.error("❌ Failed to initialize blockchain clients:", error);
   }
 } else {
-  console.warn("⚠️  ADMIN_PRIVATE_KEY not set in environment");
-  console.warn("   Server will not be able to mint NFTs");
-  console.warn("   Add ADMIN_PRIVATE_KEY to server/.env file");
+  // console.warn("⚠️  ADMIN_PRIVATE_KEY not set in environment");
+  // console.warn("   Server will not be able to mint NFTs");
+  // console.warn("   Add ADMIN_PRIVATE_KEY to server/.env file");
 }
 
 export interface DocMeta {
@@ -153,9 +153,9 @@ export async function mintNFT(request: MintRequest): Promise<MintResult> {
   const abi =
     requestType === "national_id" ? NationalIdNFTABI : LandOwnershipNFTABI;
 
-  console.log(`🎫 Minting ${requestType} NFT for ${requesterWallet}`);
-  console.log(`   Using contract: ${contractAddress}`);
-  console.log(`   Metadata items: ${documents.length}`);
+  // console.log(`🎫 Minting ${requestType} NFT for ${requesterWallet}`);
+  // console.log(`   Using contract: ${contractAddress}`);
+  // console.log(`   Metadata items: ${documents.length}`);
 
   try {
     // Note: The current contract uses safeMint(address to, string uri)
@@ -176,12 +176,12 @@ export async function mintNFT(request: MintRequest): Promise<MintResult> {
       args: [getAddress(requesterWallet), tokenURI], // Changed from metadata array to tokenURI
     });
 
-    console.log(`   Transaction sent: ${hash}`);
-    console.log("   Waiting for confirmation...");
+    // console.log(`   Transaction sent: ${hash}`);
+    // console.log("   Waiting for confirmation...");
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    console.log(`   ✅ Transaction confirmed in block ${receipt.blockNumber}`);
+    // console.log(`   ✅ Transaction confirmed in block ${receipt.blockNumber}`);
 
     // Extract tokenId from Transfer event
     // Transfer event signature: Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
