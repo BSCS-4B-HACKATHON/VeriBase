@@ -955,25 +955,25 @@ export default function AdminRequestsPage() {
                 value="all"
                 className="data-[state=active]:bg-[#3ECF8E] data-[state=active]:text-black"
               >
-                🗂️ All Requests
+                All Requests
               </TabsTrigger>
               <TabsTrigger
                 value="pending"
                 className="data-[state=active]:bg-yellow-500 data-[state=active]:text-black"
               >
-                🕓 Pending
+                Pending
               </TabsTrigger>
               <TabsTrigger
                 value="verified"
                 className="data-[state=active]:bg-green-500 data-[state=active]:text-black"
               >
-                ✅ Approved
+                Approved
               </TabsTrigger>
               <TabsTrigger
                 value="rejected"
                 className="data-[state=active]:bg-red-500 data-[state=active]:text-white"
               >
-                ❌ Rejected
+                Rejected
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -1029,11 +1029,7 @@ export default function AdminRequestsPage() {
         </motion.div>
 
         {/* Data Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
+        <div>
           <Card className="bg-surface-75 rounded-2xl border-border/40 shadow-sm shadow-black/20">
             <CardContent className="p-6">
               <div className="rounded-xl border border-white/10 overflow-hidden">
@@ -1228,7 +1224,7 @@ export default function AdminRequestsPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
       {/* Request Details Modal */}

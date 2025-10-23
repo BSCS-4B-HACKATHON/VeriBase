@@ -19,11 +19,6 @@ import Link from "next/link";
 
 const navItems = [
   {
-    title: "Dashboard",
-    url: "/admin",
-    icon: IconDashboard,
-  },
-  {
     title: "Requests",
     url: "/admin/requests",
     icon: IconListDetails,
