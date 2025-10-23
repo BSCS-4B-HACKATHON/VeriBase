@@ -33,6 +33,7 @@ import { createWalletClient, custom, WalletClient } from "viem";
 import { baseSepolia } from "viem/chains";
 import { BE_URL, findFileUrl } from "@/lib/helpers";
 import { updateLandTitle, updateNationalId } from "@/lib/request-submit";
+import Image from "next/image";
 
 type RequestStatus = "pending" | "verified" | "rejected";
 type RequestType = "national-id" | "land-title";
@@ -877,7 +878,7 @@ export default function RequestPage() {
                             <Label>Front Picture/Scan of ID</Label>
                             {editedData.nationalIdData.frontPicture && (
                               <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                                <img
+                                <Image
                                   src={editedData.nationalIdData.frontPicture}
                                   alt="Front ID"
                                   className="w-full h-full object-contain"
@@ -910,7 +911,7 @@ export default function RequestPage() {
                             <Label>Back Picture/Scan of ID</Label>
                             {editedData.nationalIdData.backPicture && (
                               <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                                <img
+                                <Image
                                   src={editedData.nationalIdData.backPicture}
                                   alt="Back ID"
                                   className="w-full h-full object-contain"
@@ -943,7 +944,7 @@ export default function RequestPage() {
                             <Label>Selfie with Front ID</Label>
                             {editedData.nationalIdData.selfieWithId && (
                               <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                                <img
+                                <Image
                                   src={editedData.nationalIdData.selfieWithId}
                                   alt="Selfie with ID"
                                   className="w-full h-full object-contain"
@@ -1159,7 +1160,7 @@ export default function RequestPage() {
                           <Label>Land Title Deed (Scan/Photo)</Label>
                           {editedData.landTitleData.deedUpload && (
                             <div className="relative rounded-lg border border-border overflow-hidden bg-muted/30 aspect-video">
-                              <img
+                              <Image
                                 src={editedData.landTitleData.deedUpload}
                                 alt="Land Title Deed"
                                 className="w-full h-full object-contain"

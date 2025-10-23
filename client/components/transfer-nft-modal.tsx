@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTransferNFT } from "@/hooks/useTransferNFT";
+import Image from "next/image";
 
 interface NFTDocument {
   id: string;
@@ -258,7 +259,7 @@ export function TransferNFTModal({
                         {/* NFT Thumbnail */}
                         <div className="relative w-20 h-20 flex-shrink-0 bg-surface-200 rounded-lg overflow-hidden border border-border/40">
                           {nft.imageUrl ? (
-                            <img
+                            <Image
                               src={nft.imageUrl}
                               alt={nft.title}
                               className="w-full h-full object-cover"

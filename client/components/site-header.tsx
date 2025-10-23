@@ -1,5 +1,4 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ThemeToggle } from "./theme-toggle";
 
 export function SiteHeader() {
   return (

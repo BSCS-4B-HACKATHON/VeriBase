@@ -45,6 +45,7 @@ import {
 } from "@/lib/admin-api";
 import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
+import Image from "next/image";
 
 interface ExtendedRequest extends VerificationRequest {
   documentType?: "Land Title" | "National ID";
@@ -709,7 +710,7 @@ export default function RequestDetailsPage() {
                           onClick={() => openImagePreview(request.frontImage!)}
                           className="aspect-video bg-background/50 rounded-lg overflow-hidden border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
                         >
-                          <img
+                          <Image
                             src={request.frontImage}
                             alt="Front ID"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
@@ -739,7 +740,7 @@ export default function RequestDetailsPage() {
                           onClick={() => openImagePreview(request.backImage!)}
                           className="aspect-video bg-background/50 rounded-lg overflow-hidden border border-border/40 hover:border-[#3ECF8E]/50 transition-all cursor-pointer group"
                         >
-                          <img
+                          <Image
                             src={request.backImage}
                             alt="Back ID"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"

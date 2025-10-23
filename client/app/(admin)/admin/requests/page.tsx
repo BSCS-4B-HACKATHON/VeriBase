@@ -62,6 +62,7 @@ import type { VerificationStatus, VerificationRequest } from "@/lib/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { findFileUrl } from "@/lib/helpers";
+import Image from "next/image";
 
 type FilterTab = "all" | "pending" | "verified" | "rejected";
 
@@ -438,7 +439,7 @@ function RequestDetailsModal({
                   <p className="text-xs text-muted-foreground">Front Picture</p>
                   {frontPicture ? (
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
-                      <img
+                      <Image
                         src={frontPicture}
                         alt="Front ID"
                         className="w-full h-full object-contain"
@@ -460,7 +461,7 @@ function RequestDetailsModal({
                   <p className="text-xs text-muted-foreground">Back Picture</p>
                   {backPicture ? (
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
-                      <img
+                      <Image
                         src={backPicture}
                         alt="Back ID"
                         className="w-full h-full object-contain"
@@ -484,7 +485,7 @@ function RequestDetailsModal({
                   </p>
                   {selfieWithId ? (
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
-                      <img
+                      <Image
                         src={selfieWithId}
                         alt="Selfie with ID"
                         className="w-full h-full object-contain"
@@ -506,7 +507,7 @@ function RequestDetailsModal({
                 <p className="text-xs text-muted-foreground">Land Title Deed</p>
                 {deedUpload ? (
                   <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
-                    <img
+                    <Image
                       src={deedUpload}
                       alt="Land Title Deed"
                       className="w-full h-full object-contain"

@@ -33,6 +33,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { TransferNFTModal } from "@/components/transfer-nft-modal";
+import Image from "next/image";
 
 interface TimelineEvent {
   title: string;
@@ -799,8 +800,8 @@ export default function NFTDocumentViewPage() {
                           </div>
                           {isImage ? (
                             <div className="rounded-lg border border-border/40 overflow-hidden bg-surface-200">
-                              <img
-                                src={file.decryptedUrl || undefined}
+                              <Image
+                                src={file.decryptedUrl || ""}
                                 alt={file.filename || `Image ${index + 1}`}
                                 className="w-full h-auto max-h-[400px] object-contain"
                               />
@@ -903,8 +904,8 @@ export default function NFTDocumentViewPage() {
             >
               Close
             </Button>
-            <img
-              src={nft.imageUrl}
+            <Image
+              src={nft.imageUrl || ""}
               alt={nft.title}
               className="w-full h-auto rounded-lg"
             />

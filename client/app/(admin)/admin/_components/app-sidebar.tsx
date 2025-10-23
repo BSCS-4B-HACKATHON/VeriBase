@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { IconDashboard, IconListDetails } from "@tabler/icons-react";
+import { IconListDetails } from "@tabler/icons-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";

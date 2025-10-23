@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export default function NFTsPage() {
   const router = useRouter();
@@ -444,8 +445,8 @@ export default function NFTsPage() {
                                     <div className="bg-surface-200/50 rounded-lg border border-border/40 overflow-hidden">
                                       {file.decryptedUrl && isImage ? (
                                         // Display image inline
-                                        <img
-                                          src={file.decryptedUrl}
+                                        <Image
+                                          src={file.decryptedUrl || ""}
                                           alt={
                                             file.filename ||
                                             `Document ${index + 1}`
