@@ -55,6 +55,9 @@ export interface DetailedAdminRequest extends AdminRequest {
     idNumber: string | null;
     issueDate: string | null;
     expiryDate: string | null;
+    frontPicture?: string | null;
+    backPicture?: string | null;
+    selfieWithId?: string | null;
   };
   // Decrypted land data for Land Ownership
   landTitleData?: {
@@ -65,6 +68,7 @@ export interface DetailedAdminRequest extends AdminRequest {
     longitude: string | null;
     titleNumber: string | null;
     lotArea: string | null;
+    deedUpload?: string | null;
   };
   // Decrypted files with URLs
   files: Array<
@@ -170,6 +174,8 @@ export async function fetchAdminRequestById(
     if (!data.ok || !data.request) {
       throw new Error("Invalid response format");
     }
+
+    console.log("Fetched admin request data:", data.request);
 
     return data.request as DetailedAdminRequest;
   } catch (error) {

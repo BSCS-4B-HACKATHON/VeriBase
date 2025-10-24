@@ -202,6 +202,7 @@ export default function RequestPage() {
 
         setRequestData(mapped);
         setEditedData(mapped);
+        console.log("Fetched Request Data:", mapped);
       } catch (error) {
         toast.error("Failed to load request details");
         console.error(error);
@@ -881,6 +882,8 @@ export default function RequestPage() {
                                 <Image
                                   src={editedData.nationalIdData.frontPicture}
                                   alt="Front ID"
+                                  width={800}
+                                  height={600}
                                   className="w-full h-full object-contain"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).src =
@@ -914,6 +917,8 @@ export default function RequestPage() {
                                 <Image
                                   src={editedData.nationalIdData.backPicture}
                                   alt="Back ID"
+                                  width={800}
+                                  height={600}
                                   className="w-full h-full object-contain"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).src =
@@ -947,6 +952,8 @@ export default function RequestPage() {
                                 <Image
                                   src={editedData.nationalIdData.selfieWithId}
                                   alt="Selfie with ID"
+                                  width={800}
+                                  height={600}
                                   className="w-full h-full object-contain"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).src =
@@ -1163,6 +1170,8 @@ export default function RequestPage() {
                               <Image
                                 src={editedData.landTitleData.deedUpload}
                                 alt="Land Title Deed"
+                                width={800}
+                                height={600}
                                 className="w-full h-full object-contain"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src =

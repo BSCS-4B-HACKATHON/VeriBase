@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -151,6 +151,7 @@ function RequestDetailsModal({
         console.log("Fetching detailed request for ID:", request.id);
         console.log("Full request object:", request);
         const data = await fetchAdminRequestById(request.id);
+        console.log("Fetched detailed request data:", data);
         setDetailedRequest(data);
       } catch (error) {
         console.error("Failed to fetch detailed request:", error);
@@ -164,7 +165,7 @@ function RequestDetailsModal({
     if (isOpen && request) {
       fetchDetailedRequest();
     }
-  }, [isOpen, request]);
+  }, [isOpen, request?.id]);
 
   if (!request) return null;
 
@@ -207,16 +208,30 @@ function RequestDetailsModal({
     const isNationalId =
       requestType === "national-id" || requestType === "national_id";
 
-    // Extract image URLs from files array using the helper function
+    // Extract image URLs: check decryptedFields first, then fall back to files array
     const files = Array.isArray(detailedRequest.files)
       ? detailedRequest.files
       : [];
-    const frontPicture = isNationalId ? findFileUrl(files, ["front_id"]) : null;
-    const backPicture = isNationalId ? findFileUrl(files, ["back_id"]) : null;
-    const selfieWithId = isNationalId
-      ? findFileUrl(files, ["selfie_with_id"])
+    const frontPicture = isNationalId
+      ? detailedRequest.nationalIdData?.frontPicture ??
+        findFileUrl(files, ["front_id"]) ??
+        null
       : null;
-    const deedUpload = !isNationalId ? findFileUrl(files, ["land_deed"]) : null;
+    const backPicture = isNationalId
+      ? detailedRequest.nationalIdData?.backPicture ??
+        findFileUrl(files, ["back_id"]) ??
+        null
+      : null;
+    const selfieWithId = isNationalId
+      ? detailedRequest.nationalIdData?.selfieWithId ??
+        findFileUrl(files, ["selfie_with_id"]) ??
+        null
+      : null;
+    const deedUpload = !isNationalId
+      ? detailedRequest.landTitleData?.deedUpload ??
+        findFileUrl(files, ["land_deed"]) ??
+        null
+      : null;
 
     return (
       <div className="space-y-6">
@@ -440,6 +455,8 @@ function RequestDetailsModal({
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
                       <Image
                         src={frontPicture}
+                        width={400}
+                        height={300}
                         alt="Front ID"
                         className="w-full h-full object-contain"
                         onError={(e) => {
@@ -462,6 +479,8 @@ function RequestDetailsModal({
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
                       <Image
                         src={backPicture}
+                        width={400}
+                        height={300}
                         alt="Back ID"
                         className="w-full h-full object-contain"
                         onError={(e) => {
@@ -485,6 +504,8 @@ function RequestDetailsModal({
                   {selfieWithId ? (
                     <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
                       <Image
+                        width={400}
+                        height={300}
                         src={selfieWithId}
                         alt="Selfie with ID"
                         className="w-full h-full object-contain"
@@ -508,6 +529,8 @@ function RequestDetailsModal({
                   <div className="aspect-video bg-background/50 rounded-lg overflow-hidden">
                     <Image
                       src={deedUpload}
+                      width={400}
+                      height={300}
                       alt="Land Title Deed"
                       className="w-full h-full object-contain"
                       onError={(e) => {
@@ -693,11 +716,7 @@ export default function AdminRequestsPage() {
   const [totalRequests, setTotalRequests] = useState(0);
 
   // Fetch real requests from API
-  useEffect(() => {
-    loadRequests();
-  }, []);
-
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetchAdminRequests({ limit: 100 });
@@ -711,7 +730,11 @@ export default function AdminRequestsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
 
   // Convert AdminRequest to ExtendedRequest format for UI compatibility
   const enhancedRequests: ExtendedRequest[] = useMemo(
@@ -792,7 +815,7 @@ export default function AdminRequestsPage() {
     setCurrentPage(1);
   }, [searchQuery, activeFilter, documentTypeFilter]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
       await loadRequests();
@@ -803,49 +826,55 @@ export default function AdminRequestsPage() {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [loadRequests]);
 
-  const handleViewDetails = (request: ExtendedRequest) => {
+  const handleViewDetails = useCallback((request: ExtendedRequest) => {
     setSelectedRequest(request);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleApprove = async (id: string) => {
-    try {
-      const result = await approveRequest(id);
-      if (result.ok) {
-        toast.success(`Request ${id} approved successfully`);
-        setIsModalOpen(false);
-        await loadRequests(); // Reload data
-      } else {
-        toast.error(result.error || "Failed to approve request");
+  const handleApprove = useCallback(
+    async (id: string) => {
+      try {
+        const result = await approveRequest(id);
+        if (result.ok) {
+          toast.success(`Request ${id} approved successfully`);
+          setIsModalOpen(false);
+          await loadRequests(); // Reload data
+        } else {
+          toast.error(result.error || "Failed to approve request");
+        }
+      } catch (error) {
+        toast.error("Failed to approve request");
+        console.error("Approve error:", error);
       }
-    } catch (error) {
-      toast.error("Failed to approve request");
-      console.error("Approve error:", error);
-    }
-  };
+    },
+    [loadRequests]
+  );
 
-  const handleReject = async (id: string) => {
-    try {
-      const result = await rejectRequest(id, "Rejected by admin");
-      if (result.ok) {
-        toast.error(`Request ${id} rejected`);
-        setIsModalOpen(false);
-        await loadRequests(); // Reload data
-      } else {
-        toast.error(result.error || "Failed to reject request");
+  const handleReject = useCallback(
+    async (id: string) => {
+      try {
+        const result = await rejectRequest(id, "Rejected by admin");
+        if (result.ok) {
+          toast.error(`Request ${id} rejected`);
+          setIsModalOpen(false);
+          await loadRequests(); // Reload data
+        } else {
+          toast.error(result.error || "Failed to reject request");
+        }
+      } catch (error) {
+        toast.error("Failed to reject request");
+        console.error("Reject error:", error);
       }
-    } catch (error) {
-      toast.error("Failed to reject request");
-      console.error("Reject error:", error);
-    }
-  };
+    },
+    [loadRequests]
+  );
 
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     toast.success("Exporting data to CSV...");
     // TODO: Implement CSV export
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">

@@ -803,6 +803,8 @@ export default function NFTDocumentViewPage() {
                               <Image
                                 src={file.decryptedUrl || ""}
                                 alt={file.filename || `Image ${index + 1}`}
+                                width={800}
+                                height={400}
                                 className="w-full h-auto max-h-[400px] object-contain"
                               />
                             </div>
@@ -907,6 +909,8 @@ export default function NFTDocumentViewPage() {
             <Image
               src={nft.imageUrl || ""}
               alt={nft.title}
+              width={1200}
+              height={800}
               className="w-full h-auto rounded-lg"
             />
           </div>

@@ -451,6 +451,8 @@ export default function NFTsPage() {
                                             file.filename ||
                                             `Document ${index + 1}`
                                           }
+                                          width={800}
+                                          height={400}
                                           className="w-full h-auto max-h-[400px] object-contain"
                                         />
                                       ) : file.decryptedUrl ? (

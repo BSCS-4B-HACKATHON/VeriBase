@@ -262,6 +262,8 @@ export function TransferNFTModal({
                             <Image
                               src={nft.imageUrl}
                               alt={nft.title}
+                              width={80}
+                              height={80}
                               className="w-full h-full object-cover"
                             />
                           ) : (
