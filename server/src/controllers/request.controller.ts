@@ -174,57 +174,103 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
     // recordDoc is already a plain object due to lean()
     const output: any = recordDoc;
 
-    // fetch metadata blob if present (only when needed)
+    // Fetch metadata and prepare for parallel AES key unwrapping
     let metadata: any = null;
+    let rawAesKey: Buffer | null = null;
+
     if (output.metadataCid) {
       try {
         metadata = await storage.fetchJsonByCid(output.metadataCid);
+
+        // Immediately start unwrapping AES key if available (don't wait for other operations)
+        if (metadata?.encryptedAesKeyForServer) {
+          try {
+            rawAesKey = await unwrapAesKeyForServer(
+              metadata.encryptedAesKeyForServer
+            );
+          } catch (err) {
+            console.warn("failed to unwrap AES key for server", err);
+            rawAesKey = null;
+          }
+        }
       } catch (err) {
         console.warn("failed to fetch metadata CID", output.metadataCid, err);
       }
     }
 
-    // Attempt to obtain AES key for server-side decryption (server-wrapped key)
-    let rawAesKey: Buffer | null = null;
-    if (metadata?.encryptedAesKeyForServer) {
-      try {
-        rawAesKey = await unwrapAesKeyForServer(
-          metadata.encryptedAesKeyForServer
-        );
-      } catch (err) {
-        console.warn("failed to unwrap AES key for server", err);
-        rawAesKey = null;
-      }
-    }
-
     // Decrypt scalar encrypted fields in parallel if we have AES key
-    if (
-      rawAesKey &&
-      metadata?.encryptedFields &&
-      typeof metadata.encryptedFields === "object"
-    ) {
-      const entries = Object.entries(metadata.encryptedFields);
-      // run all decrypts concurrently with Promise.all and build an object
-      const decryptPromises = entries.map(async ([k, v]) => {
-        try {
-          if (typeof v === "string") {
-            const dec = await decryptField(rawAesKey, {
-              ciphertextBase64: v,
-              iv: metadata.iv ?? "",
-            } as any);
-            return [k, dec] as [string, any];
-          } else {
-            const dec = await decryptField(rawAesKey, v as any);
-            return [k, dec] as [string, any];
-          }
-        } catch (err) {
-          console.warn(`failed to decrypt field ${k} for ${requestId}`, err);
-          return [k, null] as [string, any];
-        }
-      });
+    // AND prepare file entries in parallel (both are independent operations)
+    const [decryptedFieldsResult, fileEntries] = await Promise.all([
+      // Task 1: Decrypt fields
+      (async () => {
+        if (
+          rawAesKey &&
+          metadata?.encryptedFields &&
+          typeof metadata.encryptedFields === "object"
+        ) {
+          const entries = Object.entries(metadata.encryptedFields);
+          // run all decrypts concurrently with Promise.all and build an object
+          const decryptPromises = entries.map(async ([k, v]) => {
+            try {
+              if (typeof v === "string") {
+                const dec = await decryptField(rawAesKey, {
+                  ciphertextBase64: v,
+                  iv: metadata.iv ?? "",
+                } as any);
+                return [k, dec] as [string, any];
+              } else {
+                const dec = await decryptField(rawAesKey, v as any);
+                return [k, dec] as [string, any];
+              }
+            } catch (err) {
+              console.warn(
+                `failed to decrypt field ${k} for ${requestId}`,
+                err
+              );
+              return [k, null] as [string, any];
+            }
+          });
 
-      const decryptedPairs = await Promise.all(decryptPromises);
-      output.decryptedFields = Object.fromEntries(decryptedPairs);
+          const decryptedPairs = await Promise.all(decryptPromises);
+          return Object.fromEntries(decryptedPairs);
+        }
+        return null;
+      })(),
+
+      // Task 2: Prepare file entries
+      (async () => {
+        const dbFiles = Array.isArray(output.files) ? output.files : [];
+        const metaFiles = Array.isArray(metadata?.files) ? metadata.files : [];
+
+        // Build a map for metadata files keyed by CID for O(1) lookup
+        const metaByCid = new Map<string, any>();
+        for (const mf of metaFiles) {
+          if (mf && mf.cid) metaByCid.set(String(mf.cid), mf);
+        }
+
+        // if DB stored files, attach metadata via the map; otherwise, normalize metadata files
+        if (dbFiles.length) {
+          return dbFiles.map((f: any) => ({
+            ...f,
+            meta: metaByCid.get(String(f.cid)) ?? undefined,
+          }));
+        } else if (metaFiles.length) {
+          return metaFiles.map((mf: any) => ({
+            cid: mf.cid,
+            filename: mf.filename ?? mf.name,
+            mime: mf.mime,
+            size: mf.size,
+            iv: mf.iv,
+            meta: mf,
+          }));
+        }
+        return [];
+      })(),
+    ]);
+
+    // Apply decrypted fields result
+    if (decryptedFieldsResult) {
+      output.decryptedFields = decryptedFieldsResult;
     } else if (metadata?.encryptedFields) {
       // expose encrypted fields so client (uploader) can attempt client-side decryption if it has the key
       output.encryptedFields = metadata.encryptedFields;
@@ -263,39 +309,7 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
       }
     }
 
-    // Files: prefer files stored in the DB record; if missing, fall back to metadata.files
-    // Build a normalized files array:
-    // - prefer DB saved files (record may include cid, iv, filename)
-    // - otherwise fall back to metadata.files (from metadataCid on IPFS)
-    const dbFiles = Array.isArray(output.files) ? output.files : [];
-    const metaFiles = Array.isArray(metadata?.files) ? metadata.files : [];
-
-    // Build a map for metadata files keyed by CID for O(1) lookup
-    const metaByCid = new Map<string, any>();
-    for (const mf of metaFiles) {
-      if (mf && mf.cid) metaByCid.set(String(mf.cid), mf);
-    }
-
-    // if DB stored files, attach metadata via the map; otherwise, normalize metadata files
-    let fileEntries: any[] = [];
-    if (dbFiles.length) {
-      fileEntries = dbFiles.map((f: any) => ({
-        ...f,
-        meta: metaByCid.get(String(f.cid)) ?? undefined,
-      }));
-    } else if (metaFiles.length) {
-      fileEntries = metaFiles.map((mf: any) => ({
-        cid: mf.cid,
-        filename: mf.filename ?? mf.name,
-        mime: mf.mime,
-        size: mf.size,
-        iv: mf.iv,
-        meta: mf,
-      }));
-    } else {
-      fileEntries = [];
-    }
-
+    // Assign prepared file entries to output
     output.files = fileEntries;
 
     // If we have an AES key, attempt to decrypt each file and produce a usable URL (data: or signed)
@@ -316,11 +330,11 @@ export async function GetRequestByIdHandler(req: Request, res: Response) {
         }
       });
 
-      const filesOut = await Promise.all(decryptTasks);
-      output.files = filesOut;
+      output.files = await Promise.all(decryptTasks);
     }
 
-    // Map decrypted file URLs into domain objects (deedUpload, front/back/selfie)
+    // Map decrypted file URLs and decrypted fields into domain objects in parallel
+    // This section can run independently after files and fields are ready
     if (Array.isArray(output.files) && output.files.length) {
       // build a fast lookup map for file purpose tags
       const purposeMap = new Map<string, any>();

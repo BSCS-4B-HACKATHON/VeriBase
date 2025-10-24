@@ -282,7 +282,12 @@ export default function RequestPage() {
       };
 
       if (editedData.type === "national-id") {
-        const nid = editedData.nationalIdData!;
+        if (!editedData.nationalIdData) {
+          toast.error("National ID data is missing");
+          setIsSaving(false);
+          return;
+        }
+        const nid = editedData.nationalIdData;
         const form = {
           firstName: nid.firstName,
           lastName: nid.lastName,
@@ -386,7 +391,12 @@ export default function RequestPage() {
         });
         return;
       } else if (editedData.type === "land-title") {
-        const ltd = editedData.landTitleData!;
+        if (!editedData.landTitleData) {
+          toast.error("Land title data is missing");
+          setIsSaving(false);
+          return;
+        }
+        const ltd = editedData.landTitleData;
         const form = {
           firstName: ltd.firstName,
           lastName: ltd.lastName,
