@@ -141,11 +141,13 @@ export function useClientMint() {
         );
       }
 
-      // Fetch full request details from backend
+      // Fetch request details and prepare contract in parallel
       const BE_URL = process.env.NEXT_PUBLIC_BE_URL;
       if (!BE_URL) {
         throw new Error("Backend URL not configured");
       }
+
+      console.log("📡 Fetching request details...");
 
       const requestRes = await fetch(
         `${BE_URL}/api/requests/${address}/${params.requestId}`,
@@ -197,6 +199,8 @@ export function useClientMint() {
       console.log("   CID:", request.metadataCid || params.metadataURI);
       console.log("   Consent timestamp:", consentTimestampMs);
 
+      console.log("🔐 Sending transaction to wallet...");
+
       // Call mint function on the contract (user mints to themselves)
       // User signs and pays for gas
       const hash = await currentWalletClient.writeContract({
@@ -207,11 +211,37 @@ export function useClientMint() {
         chain: baseSepolia,
       });
 
-      // Wait for transaction confirmation
+      console.log("✅ Transaction submitted:", hash);
+      console.log("⏳ Waiting for confirmation...");
+
+      // Start backend deletion immediately (don't wait for confirmation)
+      // This is safe because the transaction is already on chain
+      const deleteRequestPromise = (async () => {
+        try {
+          await fetch(`${BE_URL}/api/nft/delete-request/${params.requestId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userWalletAddress: address,
+              transactionHash: hash,
+            }),
+          });
+          console.log("🗑️  Request deleted from database");
+        } catch (backendError) {
+          console.warn(
+            "Failed to delete request (non-critical):",
+            backendError
+          );
+        }
+      })();
+
+      // Wait for transaction confirmation in parallel with backend deletion
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
         confirmations: 1,
       });
+
+      console.log("✅ Transaction confirmed!");
 
       // Extract tokenId from Transfer event
       let tokenId: bigint | undefined;
@@ -233,22 +263,10 @@ export function useClientMint() {
 
       const explorerUrl = `https://sepolia.basescan.org/tx/${hash}`;
 
-      // Delete request from backend database after successful mint
-      try {
-        const BE_URL =
-          process.env.NEXT_PUBLIC_BE_URL || "http://localhost:9000";
-        await fetch(`${BE_URL}/api/nft/delete-request/${params.requestId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userWalletAddress: address,
-            transactionHash: hash,
-          }),
-        });
-        console.log("🗑️  Request deleted from database");
-      } catch (backendError) {
-        console.warn("Failed to delete request (non-critical):", backendError);
-      }
+      // Ensure backend deletion completes (but don't block on it)
+      deleteRequestPromise.catch((err) =>
+        console.warn("Backend delete error:", err)
+      );
 
       setIsMinting(false);
 
