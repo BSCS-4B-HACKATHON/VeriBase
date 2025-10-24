@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,10 +152,10 @@ export function TransferNFTModal({
     }
   }, [error]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (isTransferring) return;
     onClose();
-  };
+  }, [isTransferring, onClose]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {

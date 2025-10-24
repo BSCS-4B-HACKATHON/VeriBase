@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -143,29 +142,29 @@ function RequestDetailsModal({
   const [detailedRequest, setDetailedRequest] =
     useState<DetailedAdminRequest | null>(null);
 
-  const fetchDetailedRequest = async () => {
-    if (!request) return;
-
-    setIsLoading(true);
-    try {
-      console.log("Fetching detailed request for ID:", request.id);
-      console.log("Full request object:", request);
-      const data = await fetchAdminRequestById(request.id);
-      setDetailedRequest(data);
-    } catch (error) {
-      console.error("Failed to fetch detailed request:", error);
-      console.error("Request ID that failed:", request.id);
-      toast.error("Failed to load request details");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    async function fetchDetailedRequest() {
+      if (!request) return;
+
+      setIsLoading(true);
+      try {
+        console.log("Fetching detailed request for ID:", request.id);
+        console.log("Full request object:", request);
+        const data = await fetchAdminRequestById(request.id);
+        setDetailedRequest(data);
+      } catch (error) {
+        console.error("Failed to fetch detailed request:", error);
+        console.error("Request ID that failed:", request.id);
+        toast.error("Failed to load request details");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     if (isOpen && request) {
       fetchDetailedRequest();
     }
-  }, [isOpen, request, fetchDetailedRequest]);
+  }, [isOpen, request]);
 
   if (!request) return null;
 
@@ -678,7 +677,6 @@ function RequestDetailsModal({
 }
 
 export default function AdminRequestsPage() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");

@@ -145,7 +145,7 @@ export default function RequestDetailsPage() {
   const [request, setRequest] = useState<ExtendedRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [adminRemarks, setAdminRemarks] = useState("");
-  const [_previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   useEffect(() => {
