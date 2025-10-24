@@ -60,15 +60,8 @@ export async function submitNationalId(
   form: NationalIdForm,
   opts: SubmitOptions
 ) {
-  const {
-    address,
-    walletClient,
-    BE_URL,
-    onSuccess,
-    onError,
-    setIsSubmitting,
-    toast,
-  } = opts;
+  const { address, walletClient, BE_URL, onError, setIsSubmitting, toast } =
+    opts;
   try {
     if (setIsSubmitting) setIsSubmitting(true);
 
@@ -94,37 +87,27 @@ export async function submitNationalId(
 
     const aesKey = await genAesKey();
 
-    const encFirst = await encryptField(aesKey, form.firstName);
-    const encLast = await encryptField(aesKey, form.lastName);
-    const encIssue = await encryptField(aesKey, form.issueDate);
-    const encExpiry = await encryptField(aesKey, form.expiryDate);
-    const encId = await encryptField(aesKey, form.idNumber);
+    // Encrypt fields in parallel
+    const [encFirst, encLast, encIssue, encExpiry, encId] = await Promise.all([
+      encryptField(aesKey, form.firstName),
+      encryptField(aesKey, form.lastName),
+      encryptField(aesKey, form.issueDate),
+      encryptField(aesKey, form.expiryDate),
+      encryptField(aesKey, form.idNumber),
+    ]);
 
-    const filesMeta: Array<FileWithMeta> = [];
+    // Upload files in parallel
+    const [frontMeta, backMeta, selfieMeta] = await Promise.all([
+      encryptAndUploadFile(form.frontPicture!, aesKey, address),
+      encryptAndUploadFile(form.backPicture!, aesKey, address),
+      encryptAndUploadFile(form.selfieWithId!, aesKey, address),
+    ]);
 
-    const frontMeta = await encryptAndUploadFile(
-      form.frontPicture!,
-      aesKey,
-      address
-    );
     frontMeta.tag = "front_id";
-    filesMeta.push(frontMeta);
-
-    const backMeta = await encryptAndUploadFile(
-      form.backPicture!,
-      aesKey,
-      address
-    );
     backMeta.tag = "back_id";
-    filesMeta.push(backMeta);
-
-    const selfieMeta = await encryptAndUploadFile(
-      form.selfieWithId!,
-      aesKey,
-      address
-    );
     selfieMeta.tag = "selfie_with_id";
-    filesMeta.push(selfieMeta);
+
+    const filesMeta: Array<FileWithMeta> = [frontMeta, backMeta, selfieMeta];
 
     const signWithViemWrapper = await createSignWrapper(walletClient, address);
 
@@ -183,7 +166,7 @@ export async function submitNationalId(
     }
 
     toast.success("National ID verification request submitted successfully");
-    if (onSuccess) onSuccess();
+    return requestId;
   } catch (err) {
     console.error("submitNationalId error:", err);
     toast.error("Failed to submit request. Please try again.");
@@ -197,15 +180,8 @@ export async function submitLandTitle(
   form: LandTitleForm,
   opts: SubmitOptions
 ) {
-  const {
-    address,
-    walletClient,
-    BE_URL,
-    onSuccess,
-    onError,
-    setIsSubmitting,
-    toast,
-  } = opts;
+  const { address, walletClient, BE_URL, onError, setIsSubmitting, toast } =
+    opts;
   try {
     if (setIsSubmitting) setIsSubmitting(true);
 
@@ -246,21 +222,20 @@ export async function submitLandTitle(
 
     const aesKey = await genAesKey();
 
-    const encFirst = await encryptField(aesKey, form.firstName);
-    const encLast = await encryptField(aesKey, form.lastName);
-    const encLat = await encryptField(aesKey, String(form.latitude));
-    const encLng = await encryptField(aesKey, String(form.longitude));
-    const encTitle = await encryptField(aesKey, form.titleNumber);
-    const encArea = await encryptField(aesKey, form.lotArea);
+    // Encrypt fields and upload deed in parallel
+    const [encFirst, encLast, encLat, encLng, encTitle, encArea, deedMeta] =
+      await Promise.all([
+        encryptField(aesKey, form.firstName),
+        encryptField(aesKey, form.lastName),
+        encryptField(aesKey, String(form.latitude)),
+        encryptField(aesKey, String(form.longitude)),
+        encryptField(aesKey, form.titleNumber),
+        encryptField(aesKey, form.lotArea),
+        encryptAndUploadFile(form.deedUpload!, aesKey, address),
+      ]);
 
-    const filesMeta: Array<FileWithMeta> = [];
-    const deedMeta = await encryptAndUploadFile(
-      form.deedUpload!,
-      aesKey,
-      address
-    );
     deedMeta.tag = "land_deed";
-    filesMeta.push(deedMeta);
+    const filesMeta: Array<FileWithMeta> = [deedMeta];
 
     const signWithViemWrapper = await createSignWrapper(walletClient, address);
 
@@ -322,7 +297,7 @@ export async function submitLandTitle(
     }
 
     toast.success("Land title verification request submitted successfully");
-    if (onSuccess) onSuccess();
+    return requestId;
   } catch (err) {
     console.error("submitLandTitle error:", err);
     toast.error("Failed to submit request. Please try again.");
@@ -357,28 +332,47 @@ export async function updateNationalId(
 
     const aesKey = await genAesKey();
 
-    const encFirst = await encryptField(aesKey, form.firstName);
-    const encLast = await encryptField(aesKey, form.lastName);
-    const encIssue = await encryptField(aesKey, form.issueDate);
-    const encExpiry = await encryptField(aesKey, form.expiryDate);
-    const encId = await encryptField(aesKey, form.idNumber);
+    // Encrypt fields in parallel
+    const [encFirst, encLast, encIssue, encExpiry, encId] = await Promise.all([
+      encryptField(aesKey, form.firstName),
+      encryptField(aesKey, form.lastName),
+      encryptField(aesKey, form.issueDate),
+      encryptField(aesKey, form.expiryDate),
+      encryptField(aesKey, form.idNumber),
+    ]);
 
     const filesMeta: Array<FileWithMeta> = [];
 
+    // Upload any provided files in parallel
+    const uploadTasks: Array<Promise<FileWithMeta>> = [];
     if (form.frontPicture) {
-      const m = await encryptAndUploadFile(form.frontPicture, aesKey, address);
-      m.tag = "front_id";
-      filesMeta.push(m);
+      uploadTasks.push(
+        encryptAndUploadFile(form.frontPicture, aesKey, address).then((m) => {
+          m.tag = "front_id";
+          return m;
+        })
+      );
     }
     if (form.backPicture) {
-      const m = await encryptAndUploadFile(form.backPicture, aesKey, address);
-      m.tag = "back_id";
-      filesMeta.push(m);
+      uploadTasks.push(
+        encryptAndUploadFile(form.backPicture, aesKey, address).then((m) => {
+          m.tag = "back_id";
+          return m;
+        })
+      );
     }
     if (form.selfieWithId) {
-      const m = await encryptAndUploadFile(form.selfieWithId, aesKey, address);
-      m.tag = "selfie_with_id";
-      filesMeta.push(m);
+      uploadTasks.push(
+        encryptAndUploadFile(form.selfieWithId, aesKey, address).then((m) => {
+          m.tag = "selfie_with_id";
+          return m;
+        })
+      );
+    }
+
+    if (uploadTasks.length > 0) {
+      const uploaded = await Promise.all(uploadTasks);
+      filesMeta.push(...uploaded);
     }
 
     const signWithViemWrapper = await createSignWrapper(walletClient, address);
@@ -459,20 +453,30 @@ export async function updateLandTitle(
 
     const aesKey = await genAesKey();
 
-    const encFirst = await encryptField(aesKey, form.firstName);
-    const encLast = await encryptField(aesKey, form.lastName);
-    const encLat = await encryptField(aesKey, String(form.latitude));
-    const encLng = await encryptField(aesKey, String(form.longitude));
-    const encTitle = await encryptField(aesKey, form.titleNumber);
-    const encArea = await encryptField(aesKey, form.lotArea);
+    // Start encrypting fields and (optionally) deed upload in parallel
+    const encFieldsPromise = Promise.all([
+      encryptField(aesKey, form.firstName),
+      encryptField(aesKey, form.lastName),
+      encryptField(aesKey, String(form.latitude)),
+      encryptField(aesKey, String(form.longitude)),
+      encryptField(aesKey, form.titleNumber),
+      encryptField(aesKey, form.lotArea),
+    ]);
+
+    const deedUploadPromise = form.deedUpload
+      ? encryptAndUploadFile(form.deedUpload, aesKey, address)
+      : Promise.resolve(null as FileWithMeta | null);
+
+    const [encResults, deedMeta] = await Promise.all([
+      encFieldsPromise,
+      deedUploadPromise,
+    ] as const);
+
+    const [encFirst, encLast, encLat, encLng, encTitle, encArea] =
+      encResults as any;
 
     const filesMeta: Array<FileWithMeta> = [];
-    if (form.deedUpload) {
-      const deedMeta = await encryptAndUploadFile(
-        form.deedUpload,
-        aesKey,
-        address
-      );
+    if (deedMeta) {
       deedMeta.tag = "land_deed";
       filesMeta.push(deedMeta);
     }

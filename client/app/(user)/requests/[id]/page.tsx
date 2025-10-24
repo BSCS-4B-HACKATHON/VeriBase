@@ -202,7 +202,6 @@ export default function RequestPage() {
 
         setRequestData(mapped);
         setEditedData(mapped);
-        console.log("Fetched Request Data:", mapped);
       } catch (error) {
         toast.error("Failed to load request details");
         console.error(error);

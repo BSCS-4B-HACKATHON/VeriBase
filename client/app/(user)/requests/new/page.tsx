@@ -96,7 +96,8 @@ export default function NewRequestPage() {
       ).ethereum?.removeListener?.("accountsChanged", onAccounts);
       window.removeEventListener("vb_wallet_disconnect", onDisconnect);
     };
-  }, [disconnectWallet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // National ID form state
   const [nationalIdForm, setNationalIdForm] = useState({
@@ -175,14 +176,19 @@ export default function NewRequestPage() {
       return;
     }
 
-    await submitNationalId(nationalIdForm, {
+    const reqId = await submitNationalId(nationalIdForm, {
       address: submitAddress,
       walletClient,
       BE_URL,
       setIsSubmitting,
       toast,
-      onSuccess: () => router.replace("/requests"),
     });
+
+    if (reqId) {
+      // wait for 1 second to let user see the success toast
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      router.replace("/requests");
+    }
   };
 
   const handleSubmitLandTitle = async (e: React.FormEvent) => {
@@ -195,14 +201,19 @@ export default function NewRequestPage() {
       return;
     }
 
-    await submitLandTitle(landTitleForm, {
+    const reqId = await submitLandTitle(landTitleForm, {
       address: submitAddress,
       walletClient,
       BE_URL,
       setIsSubmitting,
       toast,
-      onSuccess: () => router.replace("/requests"),
     });
+
+    if (reqId) {
+      // wait for 1 second to let user see the success toast
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      router.replace("/requests");
+    }
   };
 
   return (
