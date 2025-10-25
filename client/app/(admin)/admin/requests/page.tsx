@@ -165,7 +165,7 @@ function RequestDetailsModal({
     if (isOpen && request) {
       fetchDetailedRequest();
     }
-  }, [isOpen, request?.id]);
+  }, [isOpen, request]);
 
   if (!request) return null;
 

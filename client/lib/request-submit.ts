@@ -472,8 +472,7 @@ export async function updateLandTitle(
       deedUploadPromise,
     ] as const);
 
-    const [encFirst, encLast, encLat, encLng, encTitle, encArea] =
-      encResults as any;
+    const [encFirst, encLast, encLat, encLng, encTitle, encArea] = encResults;
 
     const filesMeta: Array<FileWithMeta> = [];
     if (deedMeta) {
